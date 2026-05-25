@@ -93,9 +93,13 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
       <ResponsiveContainer width="100%" height={160}>
         <LineChart data={filtered} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
           <defs>
+            <linearGradient id={`norm-${markerKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.14} />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.06} />
+            </linearGradient>
             <linearGradient id={`opt-${markerKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#34d399" stopOpacity={0.15} />
-              <stop offset="100%" stopColor="#34d399" stopOpacity={0.04} />
+              <stop offset="0%" stopColor="#34d399" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="#34d399" stopOpacity={0.10} />
             </linearGradient>
           </defs>
 
@@ -118,17 +122,22 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
 
           <Tooltip content={<CustomTooltip unit={unit} markerKey={markerKey} />} />
 
-          {/* Green optimal zone */}
+          {/* Outer band: normal/healthy range */}
+          {hasNormal && (
+            <ReferenceArea y1={rangeLow ?? 0} y2={rangeHigh} fill={`url(#norm-${markerKey})`} stroke="none" />
+          )}
+
+          {/* Inner band: optimal range (overlays on top of normal band) */}
           {hasOptimal && (
             <ReferenceArea y1={optimalLow} y2={optimalHigh} fill={`url(#opt-${markerKey})`} stroke="none" />
           )}
 
-          {/* Red boundary lines at the normal (healthy) limits */}
-          {hasNormal && rangeHigh != null && (
-            <ReferenceLine y={rangeHigh} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.5} strokeWidth={1} />
+          {/* Red boundary lines only when value is actually out of range */}
+          {isOut && hasNormal && rangeHigh != null && (
+            <ReferenceLine y={rangeHigh} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.7} strokeWidth={1} />
           )}
-          {hasNormal && rangeLow != null && rangeLow > 0 && (
-            <ReferenceLine y={rangeLow} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.5} strokeWidth={1} />
+          {isOut && hasNormal && rangeLow != null && rangeLow > 0 && (
+            <ReferenceLine y={rangeLow} stroke="#f87171" strokeDasharray="4 4" strokeOpacity={0.7} strokeWidth={1} />
           )}
 
           <Line
@@ -143,16 +152,18 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
         </LineChart>
       </ResponsiveContainer>
 
-      {hasOptimal && (
-        <div className="flex items-center gap-3 text-[10px] text-[#475569]">
-          <div className="flex items-center gap-1">
-            <div className="w-6 h-2 rounded-sm bg-emerald-500 opacity-30" />
-            <span>Optimal {optimalLow}–{optimalHigh}{unit ? ` ${unit}` : ''}</span>
-          </div>
+      {(hasOptimal || hasNormal) && (
+        <div className="flex items-center gap-4 text-[10px] text-[#475569]">
+          {hasOptimal && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-emerald-400" style={{ opacity: 0.5 }} />
+              <span>Optimal {optimalLow}–{optimalHigh}{unit ? ` ${unit}` : ''}</span>
+            </div>
+          )}
           {hasNormal && (
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-px border-t border-dashed border-red-400 opacity-60" />
-              <span>Limit {rangeHigh}{unit ? ` ${unit}` : ''}</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-blue-400" style={{ opacity: 0.4 }} />
+              <span>Normal {rangeLow}–{rangeHigh}{unit ? ` ${unit}` : ''}</span>
             </div>
           )}
         </div>

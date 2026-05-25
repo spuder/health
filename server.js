@@ -154,13 +154,12 @@ app.delete('/api/:userId/body/:id', requireUser, (req, res) => {
 
 const SLEEP_METRICS = ['sleep_hours', 'sleep_quality', 'deep_sleep_hours', 'rem_sleep_hours']
 
-const BLOOD_METRICS = ['testosterone', 'triglycerides']
-
 // Ranges calibrated against Rythm Health's Optimal/Average/Out-of-Range classifications.
 // range_low/high = outer boundary (Average zone). optimal_low/high = inner target (Optimal zone).
 const BLOOD_MARKERS = {
   // Hormones — Rythm Health uses optimization targets, not standard lab population ranges
   testosterone:               { unit: 'ng/dL',    range_low: 300,  range_high: 1000, optimal_low: 500,  optimal_high: 900  },
+  total_testosterone:         { unit: 'ng/dL',    range_low: 300,  range_high: 1000, optimal_low: 500,  optimal_high: 900  },
   free_testosterone:          { unit: 'pg/mL',    range_low: 46,   range_high: 224,  optimal_low: 120,  optimal_high: 180  },
   estrogen:                   { unit: 'pg/mL',    range_low: 10,   range_high: 50,   optimal_low: 20,   optimal_high: 40   },
   estradiol:                  { unit: 'pg/mL',    range_low: 10,   range_high: 50,   optimal_low: 20,   optimal_high: 40   },
@@ -278,8 +277,9 @@ app.post('/api/:userId/blood', requireUser, (req, res) => {
 
 app.delete('/api/:userId/blood/:id', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
-  const placeholders = BLOOD_METRICS.map(() => '?').join(',')
-  db.prepare(`DELETE FROM metrics WHERE id = ? AND metric IN (${placeholders})`).run(req.params.id, ...BLOOD_METRICS)
+  const exclude = [...BODY_METRICS, ...SLEEP_METRICS, ...EXERCISE_METRICS]
+  const placeholders = exclude.map(() => '?').join(',')
+  db.prepare(`DELETE FROM metrics WHERE id = ? AND metric NOT IN (${placeholders})`).run(req.params.id, ...exclude)
   res.json({ ok: true })
 })
 

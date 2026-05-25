@@ -276,14 +276,23 @@ export default function LabsSection({ data, userId, onRefresh }) {
     return activeFilters.has(status)
   }
 
+  const STATUS_ORDER = { out: 0, normal: 1, optimal: 2 }
+  function sortByStatus(keys) {
+    return [...keys].sort((a, b) => {
+      const sa = STATUS_ORDER[getMarkerStatus(a, entries, markers)] ?? 3
+      const sb = STATUS_ORDER[getMarkerStatus(b, entries, markers)] ?? 3
+      return sa - sb
+    })
+  }
+
   // Build grouped sections: each LAB_CATEGORY, then "Other" for uncategorized keys
   const sections = LAB_CATEGORIES.map(cat => ({
     label: cat.label,
     color: cat.color,
-    keys: cat.keys.filter(k => allMarkerKeys.includes(k) && isVisible(k)),
+    keys: sortByStatus(cat.keys.filter(k => allMarkerKeys.includes(k) && isVisible(k))),
   })).filter(s => s.keys.length > 0)
 
-  const otherKeys = allMarkerKeys.filter(k => !ALL_CATEGORIZED.has(k) && isVisible(k))
+  const otherKeys = sortByStatus(allMarkerKeys.filter(k => !ALL_CATEGORIZED.has(k) && isVisible(k)))
   if (otherKeys.length) sections.push({ label: 'Other', color: '#64748b', keys: otherKeys })
 
   async function handlePdfUpload(e) {

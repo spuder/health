@@ -1,0 +1,20 @@
+services:
+  health:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      # Named volume — Docker manages it, persists across rebuilds.
+      # Your data lives at:  docker volume inspect health-dashboard_data
+      # To back it up:       docker cp health:/data ./backup
+      # - health-data:/data
+      - ./data:/data
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/data
+    restart: unless-stopped
+    env_file:
+      - .env
+
+# volumes:
+#   health-data:

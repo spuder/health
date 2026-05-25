@@ -1,0 +1,16 @@
+- [x] hide 'import from url' for now
+- [x] add sleep section under the 'body' section
+- [ ] ADd 'upload' pdf to the weight section
+- [x] Add weight /SMM/ Body Fatt mass sections to the weight section, they should be in that order
+- [x] ADd an excercise section
+    - exercise should show how many times in the last 7 days
+    - exercise should show number of minutes per day exercized
+    - exercise should show number of minutes per day heart rate was above 80 % max
+- [ ] user creation should prompt for birthday so we can calculate max heart rate based on age. 
+- [ ] Fix free testosterone showing too higth
+- [ ] Figure out source of truth for min/max values for all elements
+  - possible to get from apple helaht? 
+  - online database with recomended values? 
+- [ ] Categorized each lab seciton
+- [ ] Add a search and enable/disable checkbox for each section
+- [ ] Separate tables for apple health from labs from inbody from rythm

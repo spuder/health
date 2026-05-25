@@ -1,0 +1,19 @@
+# Never ship these — Docker builds them fresh inside the container
+node_modules
+client/node_modules
+client/dist
+
+# Git history
+.git
+.gitignore
+
+# Mac clutter
+.DS_Store
+
+# Editor
+.vscode
+*.swp
+
+# Logs
+*.log
+npm-debug.log*

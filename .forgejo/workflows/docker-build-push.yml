@@ -11,7 +11,7 @@ on:
 
 env:
   REGISTRY: forgejo.snowy-vibes.ts.net
-  IMAGE_NAME: spencer/health
+  IMAGE_NAME: health
 
 jobs:
   build-and-push:

@@ -24,7 +24,8 @@ jobs:
 
       - name: Configure Docker host
         run: |
-          GW=$(ip route show default | awk '{print $3; exit}')
+          HEX=$(awk 'NR>1 && $2=="00000000" {print $3; exit}' /proc/net/route)
+          GW=$(printf "%d.%d.%d.%d" $((16#${HEX:6:2})) $((16#${HEX:4:2})) $((16#${HEX:2:2})) $((16#${HEX:0:2})))
           echo "DOCKER_HOST=tcp://${GW}:2375" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx

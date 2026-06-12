@@ -21,7 +21,7 @@ const upload = multer({ storage: multer.memoryStorage() })
 const PORT = process.env.PORT || 3001
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 app.use(express.static(path.join(__dirname, 'client/dist')))
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -101,6 +101,8 @@ const BODY_METRICS = [
 ]
 
 const EXERCISE_METRICS = ['exercise_minutes', 'workout_count', 'hr_hard_minutes']
+
+const HEARTRATE_METRICS = ['resting_heart_rate', 'hrv', 'heart_rate']
 
 app.get('/api/:userId/body', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
@@ -228,7 +230,7 @@ const BLOOD_MARKERS = {
 
 app.get('/api/:userId/blood', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
-  const exclude = [...BODY_METRICS, ...SLEEP_METRICS, ...EXERCISE_METRICS]
+  const exclude = [...BODY_METRICS, ...SLEEP_METRICS, ...EXERCISE_METRICS, ...HEARTRATE_METRICS]
   const placeholders = exclude.map(() => '?').join(',')
   const rows = db.prepare(`
     SELECT id, date, metric, value, source, notes, created_at
@@ -277,7 +279,7 @@ app.post('/api/:userId/blood', requireUser, (req, res) => {
 
 app.delete('/api/:userId/blood/:id', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
-  const exclude = [...BODY_METRICS, ...SLEEP_METRICS, ...EXERCISE_METRICS]
+  const exclude = [...BODY_METRICS, ...SLEEP_METRICS, ...EXERCISE_METRICS, ...HEARTRATE_METRICS]
   const placeholders = exclude.map(() => '?').join(',')
   db.prepare(`DELETE FROM metrics WHERE id = ? AND metric NOT IN (${placeholders})`).run(req.params.id, ...exclude)
   res.json({ ok: true })
@@ -362,7 +364,7 @@ app.get('/api/:userId/import/stats', requireUser, (req, res) => {
   const row = db.prepare(`
     SELECT COUNT(DISTINCT date) as count, MAX(date) as last_date
     FROM metrics
-    WHERE source = 'apple_health' AND metric = 'weight'
+    WHERE source = 'apple_health'
   `).get()
   res.json({ apple_health: { count: row.count, last_date: row.last_date } })
 })
@@ -375,24 +377,35 @@ app.get('/api/:userId/import/stats', requireUser, (req, res) => {
 // ─────────────────────────────────────────────────────────────
 
 const HAE_METRIC_MAP = {
-  body_mass:                  'weight',
-  body_fat_percentage:        'body_fat',
-  lean_body_mass:             'lean_mass',
-  apple_exercise_time:        'exercise_minutes',
-  heart_rate:                 'heart_rate',
-  resting_heart_rate:         'resting_heart_rate',
-  heart_rate_variability_sdnn:'hrv',
-  active_energy_burned:       'active_calories',
-  basal_energy_burned:        'resting_calories',
-  step_count:                 'steps',
-  walking_running_distance:   'distance_miles',
-  vo2_max:                    'vo2_max',
-  blood_glucose:              'blood_glucose',
-  blood_pressure_systolic:    'bp_systolic',
-  blood_pressure_diastolic:   'bp_diastolic',
-  sleep_analysis:             'sleep_hours',
-  respiratory_rate:           'respiratory_rate',
-  body_temperature:           'body_temp_f',
+  // Body
+  body_mass:                        'weight',
+  body_fat_percentage:              'body_fat',
+  lean_body_mass:                   'lean_mass',
+  body_mass_index:                  'bmi',
+  // Heart
+  heart_rate:                       'heart_rate',
+  resting_heart_rate:               'resting_heart_rate',
+  heart_rate_variability_sdnn:      'hrv',
+  heart_rate_variability:           'hrv',
+  // Activity
+  apple_exercise_time:              'exercise_minutes',
+  active_energy_burned:             'active_calories',
+  active_energy:                    'active_calories',
+  basal_energy_burned:              'resting_calories',
+  step_count:                       'steps',
+  walking_running_distance:         'distance_miles',
+  physical_effort:                  'physical_effort',
+  // Other vitals
+  vo2_max:                          'vo2_max',
+  blood_glucose:                    'blood_glucose',
+  blood_pressure_systolic:          'bp_systolic',
+  blood_pressure_diastolic:         'bp_diastolic',
+  blood_oxygen_saturation:          'blood_oxygen',
+  respiratory_rate:                 'respiratory_rate',
+  body_temperature:                 'body_temp_f',
+  apple_sleeping_wrist_temperature: 'wrist_temp_c',
+  // Sleep
+  sleep_analysis:                   'sleep_hours',
 }
 
 function convertUnit(haeMetricName, qty, units) {
@@ -495,6 +508,23 @@ app.post('/api/:userId/exercise', requireUser, (req, res) => {
   })()
 
   res.json({ ok: true })
+})
+
+// ─────────────────────────────────────────────────────────────
+// Heart Rate  (metrics: resting_heart_rate, hrv, heart_rate)
+// ─────────────────────────────────────────────────────────────
+
+app.get('/api/:userId/heartrate', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const placeholders = HEARTRATE_METRICS.map(() => '?').join(',')
+  const rows = db.prepare(`
+    SELECT id, date, metric, value, source, notes, created_at
+    FROM metrics
+    WHERE metric IN (${placeholders})
+    ORDER BY date ASC, id ASC
+  `).all(...HEARTRATE_METRICS)
+
+  res.json({ entries: pivotMetrics(rows) })
 })
 
 // ─────────────────────────────────────────────────────────────

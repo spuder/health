@@ -2,11 +2,12 @@ import ProfileSwitcher from './ProfileSwitcher'
 import { useUser } from '../context/UserContext'
 
 const NAV = [
-  { id: 'body',   label: 'Body',   icon: '⚖️',  accent: '#7c3aed' },
-  { id: 'sleep',    label: 'Sleep',    icon: '🌙',  accent: '#60a5fa' },
-  { id: 'exercise', label: 'Exercise', icon: '🏃',  accent: '#f97316' },
-  { id: 'labs',     label: 'Labs',     icon: '🧪',  accent: '#34d399' },
-  { id: 'events', label: 'Events', icon: '📅',  accent: '#f59e0b' },
+  { id: 'body',      label: 'Body',      icon: '⚖️',  accent: '#7c3aed' },
+  { id: 'sleep',     label: 'Sleep',     icon: '🌙',  accent: '#60a5fa' },
+  { id: 'exercise',  label: 'Exercise',  icon: '🏃',  accent: '#f97316' },
+  { id: 'heartrate', label: 'Heart Rate', icon: '❤️',  accent: '#f43f5e' },
+  { id: 'labs',      label: 'Labs',      icon: '🧪',  accent: '#34d399' },
+  { id: 'events',    label: 'Events',    icon: '📅',  accent: '#f59e0b' },
 ]
 
 export default function Sidebar({ active, onNav }) {

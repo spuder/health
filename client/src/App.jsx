@@ -5,10 +5,11 @@ import Sidebar from './components/Sidebar'
 import BodySection from './components/BodySection'
 import SleepSection from './components/SleepSection'
 import ExerciseSection from './components/ExerciseSection'
+import HeartRateSection from './components/HeartRateSection'
 import LabsSection from './components/LabsSection'
 import EventsSection from './components/EventsSection'
 
-const NAV_IDS = ['body', 'sleep', 'exercise', 'labs', 'events']
+const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events']
 
 // ── Onboarding (no users yet) ────────────────────────────────
 function OnboardingScreen() {
@@ -63,11 +64,12 @@ function OnboardingScreen() {
 function Dashboard() {
   const { currentUser, currentUserId } = useUser()
   const [activeSection, setActiveSection] = useState('body')
-  const [bodyData,   setBodyData]   = useState(null)
+  const [bodyData,      setBodyData]      = useState(null)
   const [sleepData,     setSleepData]     = useState(null)
   const [exerciseData,  setExerciseData]  = useState(null)
-  const [bloodData,  setBloodData]  = useState(null)
-  const [eventsData, setEventsData] = useState(null)
+  const [heartrateData, setHeartrateData] = useState(null)
+  const [bloodData,     setBloodData]     = useState(null)
+  const [eventsData,    setEventsData]    = useState(null)
   const [loading, setLoading]       = useState(true)
   const [error,   setError]         = useState(null)
 
@@ -76,16 +78,18 @@ function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [body, sleep, exercise, blood, events] = await Promise.all([
+      const [body, sleep, exercise, heartrate, blood, events] = await Promise.all([
         api.getBody(currentUserId),
         api.getSleep(currentUserId),
         api.getExercise(currentUserId),
+        api.getHeartRate(currentUserId),
         api.getBlood(currentUserId),
         api.getEvents(currentUserId),
       ])
       setBodyData(body)
       setSleepData(sleep)
       setExerciseData(exercise)
+      setHeartrateData(heartrate)
       setBloodData(blood)
       setEventsData(events)
     } catch (e) {
@@ -100,6 +104,7 @@ function Dashboard() {
     setBodyData(null)
     setSleepData(null)
     setExerciseData(null)
+    setHeartrateData(null)
     setBloodData(null)
     setEventsData(null)
     loadAll()
@@ -150,11 +155,12 @@ function Dashboard() {
           </div>
         ) : (
           <>
-            <BodySection   data={bodyData}   events={eventsData} userId={currentUserId} onRefresh={loadAll} />
-            <SleepSection    data={sleepData}    userId={currentUserId} onRefresh={loadAll} />
-            <ExerciseSection data={exerciseData} userId={currentUserId} onRefresh={loadAll} />
-            <LabsSection     data={bloodData}    userId={currentUserId} onRefresh={loadAll} />
-            <EventsSection data={eventsData} userId={currentUserId} onRefresh={loadAll} />
+            <BodySection     data={bodyData}      events={eventsData} userId={currentUserId} onRefresh={loadAll} />
+            <SleepSection    data={sleepData}     userId={currentUserId} onRefresh={loadAll} />
+            <ExerciseSection data={exerciseData}  userId={currentUserId} onRefresh={loadAll} />
+            <HeartRateSection data={heartrateData} />
+            <LabsSection     data={bloodData}     userId={currentUserId} onRefresh={loadAll} />
+            <EventsSection   data={eventsData}    userId={currentUserId} onRefresh={loadAll} />
           </>
         )}
       </main>

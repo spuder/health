@@ -31,6 +31,9 @@ export const api = {
   getExercise: (userId)     => req(`/${userId}/exercise`),
   logExercise: (userId, e)  => req(`/${userId}/exercise`, { method: 'POST', body: JSON.stringify(e) }),
 
+  // ── Heart Rate ────────────────────────────────────────────
+  getHeartRate: (userId)    => req(`/${userId}/heartrate`),
+
   // ── Events ────────────────────────────────────────────────
   getEvents:    (userId)     => req(`/${userId}/events`),
   addEvent:     (userId, e)  => req(`/${userId}/events`,    { method: 'POST', body: JSON.stringify(e) }),

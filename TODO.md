@@ -7,10 +7,11 @@
     - exercise should show number of minutes per day exercized
     - exercise should show number of minutes per day heart rate was above 80 % max
 - [ ] user creation should prompt for birthday so we can calculate max heart rate based on age. 
-- [ ] Fix free testosterone showing too higth
-- [ ] Figure out source of truth for min/max values for all elements
+- [x] Fix free testosterone showing too higth
+- [x] Figure out source of truth for min/max values for all elements
   - possible to get from apple helaht? 
   - online database with recomended values? 
-- [ ] Categorized each lab seciton
-- [ ] Add a search and enable/disable checkbox for each section
+- [x] Categorized each lab seciton
+- [x] Add a search and enable/disable checkbox for each section
 - [ ] Separate tables for apple health from labs from inbody from rythm
+- [ ] setup cicd docker container

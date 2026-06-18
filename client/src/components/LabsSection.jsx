@@ -93,6 +93,53 @@ function CustomTooltip({ active, payload, unit, markerKey }) {
     </div>
   )
 }
+const MARKER_INFO = {
+  hematocrit: {
+    summary: 'Blood thickness — the percentage of your blood that is red blood cells.',
+    details: 'High hematocrit means thicker blood, which raises clot and stroke risk. If consistently above range, consider donating blood — it lowers hematocrit quickly and durably. Low hematocrit may indicate anemia or overhydration.',
+  },
+  apob: {
+    summary: 'Counts the number of particles that can stick to artery walls.',
+    details: 'Each LDL, VLDL, and lipoprotein(a) particle carries exactly one ApoB molecule. ApoB is a direct count of atherogenic particles — more particles means more chances for one to lodge in an artery wall and trigger plaque. It predicts cardiovascular risk better than LDL cholesterol alone, especially if your LDL looks normal but particle count is high.',
+  },
+  hscrp: {
+    summary: 'High-sensitivity inflammation marker — detects low-grade chronic inflammation.',
+    details: 'hsCRP is produced by the liver in response to inflammation anywhere in the body. Chronically elevated levels signal that your immune system is quietly active, which accelerates arterial plaque buildup and raises heart attack risk independently of cholesterol. Common drivers: poor sleep, visceral fat, processed food, gum disease, overtraining, or hidden infection. Below 1.0 mg/L is low risk; 1–3 is moderate; above 3 is high.',
+  },
+  // Add more markers here over time
+}
+
+function MarkerInfoPopup({ markerKey }) {
+  const info = MARKER_INFO[markerKey]
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  if (!info) return null
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-5 h-5 rounded-full border border-[#2d3d58] text-[#475569] hover:text-[#94a3b8] hover:border-[#475569] text-[10px] font-bold flex items-center justify-center transition-colors"
+      >
+        ?
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-20 w-64 bg-[#0a0f1a] border border-[#1d2a3e] rounded-xl p-4 shadow-2xl">
+          <p className="text-white text-xs font-medium mb-2">{info.summary}</p>
+          <p className="text-[#64748b] text-xs leading-relaxed">{info.details}</p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow }) {
   const hasOptimal = optimalLow != null || optimalHigh != null
@@ -117,7 +164,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
   }
 
   const isOut = status === 'out'
-  const chartColor = isOut ? '#f87171' : status === 'normal' ? '#f59e0b' : color
+  const chartColor = isOut ? '#f87171' : status === 'normal' ? '#f59e0b' : status === 'optimal' ? '#34d399' : color
 
   const allVals = filtered.map(e => e[markerKey])
   const refVals = [
@@ -139,15 +186,18 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
           <h3 className="text-white font-semibold text-base">{title}</h3>
           {unit && <p className="text-[#475569] text-xs mt-0.5">{unit}</p>}
         </div>
-        {status && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-            status === 'optimal' ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
-            status === 'normal'  ? 'border-amber-800  bg-amber-950  text-amber-400'  :
-                                   'border-red-800    bg-red-950    text-red-400'
-          }`}>
-            {status === 'optimal' ? 'Optimal' : status === 'normal' ? 'Normal' : 'Out of range'}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {status && (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+              status === 'optimal' ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
+              status === 'normal'  ? 'border-amber-800  bg-amber-950  text-amber-400'  :
+                                     'border-red-800    bg-red-950    text-red-400'
+            }`}>
+              {status === 'optimal' ? 'Optimal' : status === 'normal' ? 'Normal' : 'Out of range'}
+            </span>
+          )}
+          <MarkerInfoPopup markerKey={markerKey} />
+        </div>
       </div>
 
       <div className="flex items-end gap-2">
@@ -244,8 +294,9 @@ const STATUS_FILTERS = [
   { id: 'out',     label: 'Out of Range', activeClass: 'border-red-700     bg-red-950     text-red-400'     },
 ]
 
-export default function LabsSection({ data, userId, onRefresh }) {
-  const [showLog, setShowLog] = useState(false)
+const SOURCE_LABEL = { blood_panel: 'Blood Panel', inbody: 'InBody Scan', other: 'Lab Report' }
+
+export default function LabsSection({ data, reports = [], userId, onRefresh }) {
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))

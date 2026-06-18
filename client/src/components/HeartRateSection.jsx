@@ -1,8 +1,11 @@
 import { useState, useMemo } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ReferenceLine, ResponsiveContainer,
+  ReferenceLine, ReferenceArea, ResponsiveContainer,
 } from 'recharts'
+
+const BRADYCARDIA_THRESHOLD = 40
+const Y_MIN = 35
 
 const RANGES = [
   { label: '1W',  days: 7   },
@@ -29,6 +32,7 @@ function avg(entries, key) {
 
 function rhrColor(bpm) {
   if (bpm == null) return COLOR
+  if (bpm < BRADYCARDIA_THRESHOLD) return '#f59e0b'
   if (bpm < 60) return '#34d399'
   if (bpm <= 75) return COLOR
   return '#f59e0b'
@@ -93,8 +97,8 @@ export default function HeartRateSection({ data }) {
   const avg30  = avg(filterByRange(withRhr, 30), 'resting_heart_rate')
 
   const yMin = useMemo(() => {
-    if (!filtered.length) return 40
-    return Math.floor(Math.min(...filtered.map(e => e.resting_heart_rate)) - 5)
+    if (!filtered.length) return Y_MIN
+    return Math.min(Y_MIN, Math.floor(Math.min(...filtered.map(e => e.resting_heart_rate)) - 5))
   }, [filtered])
 
   const yMax = useMemo(() => {

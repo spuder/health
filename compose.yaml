@@ -1,6 +1,8 @@
 services:
   health:
-    build: .
+    # build: .
+    image: forgejo.snowy-vibes.ts.net/spencer/health:latest
+    container_name: health
     # ports:
     #   - "3001:3001"
     volumes:

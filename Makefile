@@ -38,6 +38,6 @@ stop-container:
 
 # ── Remote deploy ─────────────────────────────────────────────
 publish:
-	curl -X POST https://dockhand.snowy-vibes.ts.net/api/git/stacks/1/webhook \
+	curl -X POST https://dockhand.snowy-vibes.ts.net/api/git/stacks/4/webhook \
 		-H "Content-Type: application/json" \
 		-H "X-Webhook-Secret: $(DOCKHAND_WEBHOOK_SECRET)"

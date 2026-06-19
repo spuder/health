@@ -38,7 +38,7 @@ function BodyForm({ heightInches, onSubmit, onClose, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Date">
           <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
         </Field>
@@ -54,7 +54,7 @@ function BodyForm({ heightInches, onSubmit, onClose, loading }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Skeletal Muscle Mass" sublabel="(%) — optional">
           <input type="number" step="0.1" placeholder="42.6" value={smm} onChange={e => setSmm(e.target.value)} />
         </Field>
@@ -96,7 +96,7 @@ function BloodForm({ onSubmit, onClose, loading }) {
         <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Testosterone" sublabel="(ng/dL)">
           <input type="number" step="1" placeholder="612" value={testosterone} onChange={e => setTestosterone(e.target.value)} />
         </Field>
@@ -140,7 +140,7 @@ function ExerciseForm({ onSubmit, onClose, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Date">
           <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
         </Field>
@@ -188,7 +188,7 @@ function SleepForm({ onSubmit, onClose, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Date">
           <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
         </Field>
@@ -231,7 +231,7 @@ function EventForm({ onSubmit, onClose, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Date">
           <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
         </Field>

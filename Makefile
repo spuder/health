@@ -1,7 +1,12 @@
-.PHONY: clean \
+.PHONY: default clean \
 	build-podman stop-podman \
 	build-container stop-container \
 	publish
+
+default:
+	@echo "Available targets:"
+	@echo "  build-podman    build-container    stop-podman    stop-container    publish    clean"
+	@printf "Target: "; read target; $(MAKE) $$target
 
 clean:
 	rm -f data/*.db data/*.db-shm data/*.db-wal

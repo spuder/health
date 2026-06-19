@@ -118,7 +118,7 @@ export default function HeartRateSection({ data }) {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <StatCard
           label="Latest"
           value={latest?.resting_heart_rate != null ? Math.round(latest.resting_heart_rate) : null}

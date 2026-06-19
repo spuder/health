@@ -514,7 +514,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
                 <div className="w-1 h-4 rounded-full" style={{ backgroundColor: section.color }} />
                 <h3 className="text-[#94a3b8] text-sm font-medium">{section.label}</h3>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {section.keys.map(key => (
                   <LabChart
                     key={key}

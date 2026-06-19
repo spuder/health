@@ -122,7 +122,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <StatCard
           label="Sessions This Week"
           value={workoutsThisWeek || null}

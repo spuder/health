@@ -64,6 +64,7 @@ function OnboardingScreen() {
 function Dashboard() {
   const { currentUser, currentUserId } = useUser()
   const [activeSection, setActiveSection] = useState('body')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [bodyData,      setBodyData]      = useState(null)
   const [sleepData,     setSleepData]     = useState(null)
   const [exerciseData,  setExerciseData]  = useState(null)
@@ -116,6 +117,7 @@ function Dashboard() {
 
   const handleNav = (id) => {
     setActiveSection(id)
+    setSidebarOpen(false)
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   }
 
@@ -132,12 +134,26 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#070b12]">
-      <Sidebar active={activeSection} onNav={handleNav} />
+      <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="ml-56 px-10 py-10 max-w-5xl">
+      {/* Mobile top bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-20 h-14 bg-[#0a0f1a] border-b border-[#1d2a3e] flex items-center px-4 gap-3">
+        <button
+          onClick={() => setSidebarOpen(o => !o)}
+          className="w-8 h-8 flex flex-col justify-center gap-1.5 text-[#94a3b8] hover:text-white"
+          aria-label="Toggle menu"
+        >
+          <span className="block h-0.5 w-5 bg-current rounded" />
+          <span className="block h-0.5 w-5 bg-current rounded" />
+          <span className="block h-0.5 w-5 bg-current rounded" />
+        </button>
+        <span className="text-white font-semibold text-sm tracking-tight">Health</span>
+      </div>
+
+      <main className="md:ml-56 px-4 md:px-10 py-6 md:py-10 pt-20 md:pt-10 max-w-5xl">
         {/* Page header */}
-        <div className="mb-10">
-          <h1 className="text-white text-3xl font-bold tracking-tight">
+        <div className="mb-8 md:mb-10">
+          <h1 className="text-white text-2xl md:text-3xl font-bold tracking-tight">
             {currentUser?.name ? `${currentUser.name.charAt(0).toUpperCase() + currentUser.name.slice(1)}'s Dashboard` : 'Dashboard'}
           </h1>
           <p className="text-[#475569] text-sm mt-1">Your personal health data, all in one place.</p>
@@ -153,7 +169,7 @@ function Dashboard() {
         {loading ? (
           <div className="flex flex-col gap-4 animate-pulse">
             <div className="h-72 bg-[#0d1422] border border-[#1d2a3e] rounded-2xl" />
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[0,1,2].map(i => <div key={i} className="h-32 bg-[#0d1422] border border-[#1d2a3e] rounded-2xl" />)}
             </div>
           </div>

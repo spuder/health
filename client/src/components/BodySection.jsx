@@ -197,14 +197,14 @@ export default function BodySection({ data, events, userId, onRefresh }) {
       <WeightChart entries={entries} events={events?.entries ?? []} />
 
       {/* Trend charts: Weight · SMM · Body Fat Mass */}
-      <div className="grid grid-cols-3 gap-4 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
         <BodyTrendChart title="Weight"          dataKey="weight"              unit="lbs" color="#a78bfa" entries={entries} />
         <BodyTrendChart title="Muscle Mass"     dataKey="skeletal_muscle_mass" unit="lbs" color="#34d399" entries={entries} />
         <BodyTrendChart title="Body Fat Mass"   dataKey="body_fat_mass"       unit="lbs" color="#f59e0b" entries={entries} />
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-3 gap-4 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
         <MetricCard
           label="BMI"
           value={latestBMI}

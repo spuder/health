@@ -78,7 +78,7 @@ export default function SleepSection({ data }) {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <StatCard
           label="Last Night"
           value={latest?.sleep_hours}

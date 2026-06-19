@@ -215,6 +215,9 @@ export default function HeartRateSection({ data }) {
 
                 <Tooltip content={<RhrTooltip />} />
 
+                <ReferenceArea y1={Y_MIN} y2={BRADYCARDIA_THRESHOLD} fill="#f59e0b" fillOpacity={0.07} stroke="none" />
+                <ReferenceLine y={BRADYCARDIA_THRESHOLD} stroke="#f59e0b" strokeDasharray="4 4" strokeOpacity={0.5} strokeWidth={1} label={{ value: 'Bradycardia', position: 'insideTopLeft', fill: '#f59e0b', fontSize: 10, opacity: 0.7 }} />
+
                 <Area
                   type="monotone"
                   dataKey="resting_heart_rate"

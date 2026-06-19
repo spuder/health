@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
+import crypto from 'crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data')
@@ -46,6 +47,16 @@ const SCHEMA = `
     updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS lab_reports (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    date         TEXT    NOT NULL,
+    filename     TEXT    NOT NULL,
+    file_hash    TEXT,
+    source_type  TEXT,
+    markers_json TEXT,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_metrics_date    ON metrics(date);
   CREATE INDEX IF NOT EXISTS idx_metrics_metric  ON metrics(metric);
   CREATE INDEX IF NOT EXISTS idx_events_date     ON events(date);
@@ -60,6 +71,25 @@ export function getDb(userId) {
   const db = new Database(dbPath)
   db.pragma('journal_mode = WAL')  // safe concurrent reads
   db.exec(SCHEMA)
+
+  // Migrations for columns added after initial deploy
+  try { db.exec(`ALTER TABLE lab_reports ADD COLUMN file_hash TEXT`) } catch {}
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_reports_hash ON lab_reports(file_hash) WHERE file_hash IS NOT NULL`)
+
+  // Backfill file_hash for any existing reports that don't have one yet
+  const unhashed = db.prepare(`SELECT id, filename FROM lab_reports WHERE file_hash IS NULL`).all()
+  if (unhashed.length) {
+    const update = db.prepare(`UPDATE lab_reports SET file_hash = ? WHERE id = ?`)
+    for (const row of unhashed) {
+      const filePath = path.join(DATA_DIR, 'pdfs', row.filename)
+      if (fs.existsSync(filePath)) {
+        const hash = crypto.createHash('sha256')
+          .update(fs.readFileSync(filePath))
+          .digest('hex')
+        try { update.run(hash, row.id) } catch {}
+      }
+    }
+  }
 
   connections[userId] = db
   return db

@@ -69,6 +69,7 @@ function Dashboard() {
   const [exerciseData,  setExerciseData]  = useState(null)
   const [heartrateData, setHeartrateData] = useState(null)
   const [bloodData,     setBloodData]     = useState(null)
+  const [labReports,    setLabReports]    = useState(null)
   const [eventsData,    setEventsData]    = useState(null)
   const [loading, setLoading]       = useState(true)
   const [error,   setError]         = useState(null)
@@ -78,13 +79,14 @@ function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [body, sleep, exercise, heartrate, blood, events] = await Promise.all([
+      const [body, sleep, exercise, heartrate, blood, events, reports] = await Promise.all([
         api.getBody(currentUserId),
         api.getSleep(currentUserId),
         api.getExercise(currentUserId),
         api.getHeartRate(currentUserId),
         api.getBlood(currentUserId),
         api.getEvents(currentUserId),
+        api.getLabReports(currentUserId),
       ])
       setBodyData(body)
       setSleepData(sleep)
@@ -92,6 +94,7 @@ function Dashboard() {
       setHeartrateData(heartrate)
       setBloodData(blood)
       setEventsData(events)
+      setLabReports(reports)
     } catch (e) {
       setError('Could not connect to the API. Make sure the server is running on port 3001.')
     } finally {
@@ -107,6 +110,7 @@ function Dashboard() {
     setHeartrateData(null)
     setBloodData(null)
     setEventsData(null)
+    setLabReports(null)
     loadAll()
   }, [currentUserId, loadAll])
 
@@ -134,7 +138,7 @@ function Dashboard() {
         {/* Page header */}
         <div className="mb-10">
           <h1 className="text-white text-3xl font-bold tracking-tight">
-            {currentUser?.name ? `${currentUser.name}'s Dashboard` : 'Dashboard'}
+            {currentUser?.name ? `${currentUser.name.charAt(0).toUpperCase() + currentUser.name.slice(1)}'s Dashboard` : 'Dashboard'}
           </h1>
           <p className="text-[#475569] text-sm mt-1">Your personal health data, all in one place.</p>
         </div>
@@ -156,10 +160,10 @@ function Dashboard() {
         ) : (
           <>
             <BodySection     data={bodyData}      events={eventsData} userId={currentUserId} onRefresh={loadAll} />
-            <SleepSection    data={sleepData}     userId={currentUserId} onRefresh={loadAll} />
+            <SleepSection    data={sleepData} />
             <ExerciseSection data={exerciseData}  userId={currentUserId} onRefresh={loadAll} />
             <HeartRateSection data={heartrateData} />
-            <LabsSection     data={bloodData}     userId={currentUserId} onRefresh={loadAll} />
+            <LabsSection     data={bloodData}     reports={labReports?.reports ?? []} userId={currentUserId} onRefresh={loadAll} />
             <EventsSection   data={eventsData}    userId={currentUserId} onRefresh={loadAll} />
           </>
         )}

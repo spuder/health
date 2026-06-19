@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceArea, ResponsiveContainer,
 } from 'recharts'
-import LogModal from './LogModal'
 
 const CHART_COLORS = ['#a78bfa', '#34d399', '#60a5fa', '#f59e0b', '#f87171', '#e879f9', '#2dd4bf', '#fb923c']
 const SKIP_KEYS = new Set(['date', 'source', 'notes'])
@@ -93,6 +92,7 @@ function CustomTooltip({ active, payload, unit, markerKey }) {
     </div>
   )
 }
+
 const MARKER_INFO = {
   hematocrit: {
     summary: 'Blood thickness — the percentage of your blood that is red blood cells.',
@@ -300,6 +300,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
+  const [reportsOpen, setReportsOpen] = useState(false)
   const fileInputRef = useRef(null)
   const entries = data?.entries ?? []
   const markers = data?.markers ?? {}
@@ -347,21 +348,32 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
   if (otherKeys.length) sections.push({ label: 'Other', color: '#64748b', keys: otherKeys })
 
   async function handlePdfUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = [...(e.target.files ?? [])]
+    if (!files.length) return
     e.target.value = ''
 
     setUploading(true)
     setUploadResult(null)
-    try {
-      const result = await api.importLabsPdf(userId, file)
-      setUploadResult({ ok: true, count: result.count, markers_found: result.markers_found, date: result.date })
-      onRefresh()
-    } catch (err) {
-      setUploadResult({ error: err.message })
-    } finally {
-      setUploading(false)
+    let totalCount = 0
+    const allMarkers = []
+    const errors = []
+    for (const file of files) {
+      try {
+        const result = await api.importLabsPdf(userId, file)
+        totalCount += result.count ?? 0
+        allMarkers.push(...(result.markers_found ?? []))
+      } catch (err) {
+        const msg = err.message?.startsWith('Duplicate:') ? `${file.name} — already imported` : `${file.name}: ${err.message}`
+        errors.push(msg)
+      }
     }
+    if (errors.length && totalCount === 0) {
+      setUploadResult({ error: errors.join('; ') })
+    } else {
+      setUploadResult({ ok: true, count: totalCount, markers_found: [...new Set(allMarkers)], files: files.length, errors })
+      onRefresh()
+    }
+    setUploading(false)
   }
 
   return (
@@ -373,7 +385,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
           <h2 className="text-white text-xl font-semibold">Labs</h2>
         </div>
         <div className="flex items-center gap-2">
-          <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePdfUpload} />
+          <input ref={fileInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={handlePdfUpload} />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
@@ -431,11 +443,58 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
             <span>⚠ {uploadResult.error}</span>
           ) : (
             <span>
-              Imported {uploadResult.count} metric{uploadResult.count !== 1 ? 's' : ''} from {uploadResult.date}
-              {' — '}{uploadResult.markers_found.join(', ')}
+              Imported {uploadResult.count} metric{uploadResult.count !== 1 ? 's' : ''} across {uploadResult.files} file{uploadResult.files !== 1 ? 's' : ''}
+              {uploadResult.markers_found.length > 0 && ` — ${uploadResult.markers_found.join(', ')}`}
+              {uploadResult.errors?.length > 0 && ` (${uploadResult.errors.length} failed)`}
             </span>
           )}
           <button onClick={() => setUploadResult(null)} className="opacity-50 hover:opacity-100 shrink-0">✕</button>
+        </div>
+      )}
+
+      {/* Past reports — collapsible */}
+      {reports.length > 0 && (
+        <div className="mb-6">
+          <button
+            onClick={() => setReportsOpen(v => !v)}
+            className="flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] text-xs font-medium mb-2 transition-colors"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${reportsOpen ? 'rotate-90' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            {reports.length} report{reports.length !== 1 ? 's' : ''}
+          </button>
+          {reportsOpen && (
+            <div className="flex flex-col gap-2">
+              {reports.map(r => (
+                <div key={r.id} className="flex items-center justify-between bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-4 h-4 text-[#475569] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <div>
+                      <span className="text-white text-sm font-medium">
+                        {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
+                    </div>
+                    <span className="text-[#2d3d58] text-xs">{r.markers.length} markers</span>
+                  </div>
+                  <a
+                    href={api.labReportPdfUrl(userId, r.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#1d2a3e] hover:border-[#2d3d58] transition-colors"
+                  >
+                    View PDF
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -476,17 +535,6 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
         </div>
       )}
 
-      {showLog && (
-        <LogModal
-          type="blood"
-          onClose={() => setShowLog(false)}
-          onSave={async (entry) => {
-            await api.logBlood(userId, entry)
-            onRefresh()
-            setShowLog(false)
-          }}
-        />
-      )}
     </section>
   )
 }

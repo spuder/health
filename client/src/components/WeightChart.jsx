@@ -53,7 +53,7 @@ export default function WeightChart({ entries, events = [] }) {
   const [range, setRange] = useState('1M')
   const activeDays = RANGES.find(r => r.label === range)?.days
 
-  const filtered = useMemo(() => filterByRange(entries, activeDays), [entries, activeDays])
+  const filtered = useMemo(() => filterByRange(entries.filter(e => e.weight != null), activeDays), [entries, activeDays])
 
   const eventDates = useMemo(() => {
     const visible = events.filter(e => {

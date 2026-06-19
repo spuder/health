@@ -1,10 +1,7 @@
-import { useState } from 'react'
-import { api } from '../api'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceArea, ResponsiveContainer,
 } from 'recharts'
-import LogModal from './LogModal'
 
 const OPTIMAL_MIN = 7
 const OPTIMAL_MAX = 9
@@ -58,8 +55,7 @@ function CustomTooltip({ active, payload }) {
   )
 }
 
-export default function SleepSection({ data, userId, onRefresh }) {
-  const [showLog, setShowLog] = useState(false)
+export default function SleepSection({ data }) {
   const entries = data?.entries ?? []
   const withHours = entries.filter(e => e.sleep_hours != null)
 
@@ -74,18 +70,11 @@ export default function SleepSection({ data, userId, onRefresh }) {
 
   return (
     <section id="sleep" className="mb-16">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center mb-6">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 rounded-full bg-[#60a5fa]" />
           <h2 className="text-white text-xl font-semibold">Sleep</h2>
         </div>
-        <button
-          onClick={() => setShowLog(true)}
-          className="flex items-center gap-2 bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          Log Sleep
-        </button>
       </div>
 
       {/* Stat cards */}
@@ -167,17 +156,6 @@ export default function SleepSection({ data, userId, onRefresh }) {
         )}
       </div>
 
-      {showLog && (
-        <LogModal
-          type="sleep"
-          onClose={() => setShowLog(false)}
-          onSave={async (entry) => {
-            await api.logSleep(userId, entry)
-            onRefresh()
-            setShowLog(false)
-          }}
-        />
-      )}
     </section>
   )
 }

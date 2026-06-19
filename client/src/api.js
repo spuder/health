@@ -44,6 +44,9 @@ export const api = {
   importAppleHealth: (userId, payload) =>
     req(`/${userId}/import/apple-health`, { method: 'POST', body: JSON.stringify(payload) }),
 
+  getLabReports:  (userId)     => req(`/${userId}/lab-reports`),
+  labReportPdfUrl:(userId, id) => `/api/${userId}/lab-reports/${id}/pdf`,
+
   importLabsPdf: async (userId, file) => {
     const form = new FormData()
     form.append('pdf', file)

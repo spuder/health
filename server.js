@@ -2,6 +2,8 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import fs from 'fs'
+import crypto from 'crypto'
 import { fileURLToPath } from 'url'
 import multer from 'multer'
 import Anthropic from '@anthropic-ai/sdk'
@@ -592,8 +594,35 @@ InBody body-composition scans:
   bmr                  → kcal
   total_body_water     → liters`
 
+app.get('/api/:userId/lab-reports', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const reports = db.prepare(`SELECT * FROM lab_reports ORDER BY date DESC, created_at DESC`).all()
+  res.json({ reports: reports.map(r => ({ ...r, markers: JSON.parse(r.markers_json ?? '[]') })) })
+})
+
+app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const report = db.prepare(`SELECT * FROM lab_reports WHERE id = ?`).get(req.params.id)
+  if (!report) return res.status(404).json({ error: 'Report not found' })
+
+  const pdfPath = path.join(DATA_DIR, 'pdfs', report.filename)
+  if (!fs.existsSync(pdfPath)) return res.status(404).json({ error: 'PDF file not found' })
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="${report.filename}"`)
+  fs.createReadStream(pdfPath).pipe(res)
+})
+
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No PDF uploaded' })
+
+  // ── 0. Duplicate check ────────────────────────────────────
+  const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
+  const db0 = getDb(req.params.userId)
+  const existing = db0.prepare(`SELECT id, date FROM lab_reports WHERE file_hash = ?`).get(fileHash)
+  if (existing) {
+    return res.status(409).json({ error: `Duplicate: this PDF was already imported (report from ${existing.date})` })
+  }
 
   // ── 1. Extract text ───────────────────────────────────────
   let text
@@ -639,7 +668,13 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
     return res.status(422).json({ error: 'No numeric metrics found in this PDF.' })
   }
 
-  // ── 3. Upsert into DB ─────────────────────────────────────
+  // ── 3. Save PDF to disk ───────────────────────────────────
+  const pdfDir = path.join(DATA_DIR, 'pdfs')
+  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true })
+  const filename = `${req.params.userId}_${date}_${Date.now()}.pdf`
+  fs.writeFileSync(path.join(pdfDir, filename), req.file.buffer)
+
+  // ── 4. Upsert into DB ─────────────────────────────────────
   const db = getDb(req.params.userId)
   const upsert = db.prepare(`
     INSERT INTO metrics (date, metric, value, source, notes)
@@ -659,6 +694,8 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
       updated_at = excluded.updated_at
   `)
 
+  const markerNames = validMetrics.map(([k]) => k)
+
   try {
     db.transaction(() => {
       for (const [metric, value] of validMetrics) {
@@ -670,9 +707,14 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
         if (low == null && high == null) continue
         rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
       }
+
+      db.prepare(`
+        INSERT INTO lab_reports (date, filename, file_hash, source_type, markers_json)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(date, filename, fileHash, parsed.source_type ?? 'other', JSON.stringify(markerNames))
     })()
     const rangeCount = Object.keys(parsed.reference_ranges ?? {}).length
-    console.log(`[labs-pdf] Saved ${validMetrics.length} metrics, ${rangeCount} reference ranges to ${req.params.userId}.db (date: ${date})`)
+    console.log(`[labs-pdf] Saved ${validMetrics.length} metrics, ${rangeCount} ranges, PDF: ${filename}`)
   } catch (err) {
     console.error('[labs-pdf] DB write error:', err)
     return res.status(500).json({ error: `Database write failed: ${err.message}` })
@@ -682,7 +724,7 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
     ok: true,
     date,
     source_type: parsed.source_type ?? 'other',
-    markers_found: validMetrics.map(([k]) => k),
+    markers_found: markerNames,
     count: validMetrics.length,
   })
 })

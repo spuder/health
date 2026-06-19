@@ -58,6 +58,10 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
+  deploy:
+    runs-on: docker
+
+    steps:
     - name: Deploy via Dockhand
       run: |
         PAYLOAD=""

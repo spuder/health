@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import RawDataModal from './RawDataModal'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceArea, ResponsiveContainer,
@@ -56,6 +58,7 @@ function CustomTooltip({ active, payload }) {
 }
 
 export default function SleepSection({ data }) {
+  const [showRaw, setShowRaw] = useState(false)
   const entries = data?.entries ?? []
   const withHours = entries.filter(e => e.sleep_hours != null)
 
@@ -70,11 +73,12 @@ export default function SleepSection({ data }) {
 
   return (
     <section id="sleep" className="mb-16">
-      <div className="flex items-center mb-6">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 rounded-full bg-[#60a5fa]" />
           <h2 className="text-white text-xl font-semibold">Sleep</h2>
         </div>
+        <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
       </div>
 
       {/* Stat cards */}
@@ -155,7 +159,7 @@ export default function SleepSection({ data }) {
           </>
         )}
       </div>
-
+      {showRaw && <RawDataModal label="sleep" data={data} onClose={() => setShowRaw(false)} />}
     </section>
   )
 }

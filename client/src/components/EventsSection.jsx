@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import LogModal from './LogModal'
+import RawDataModal from './RawDataModal'
 
 const EVENT_TYPES = {
   doctor_visit: {
@@ -76,6 +77,7 @@ function EventCard({ event, onDelete }) {
 
 export default function EventsSection({ data, userId, onRefresh }) {
   const [showLog, setShowLog] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
 
   const entries = [...(data?.entries ?? [])].reverse() // newest first
 
@@ -91,13 +93,16 @@ export default function EventsSection({ data, userId, onRefresh }) {
           <div className="w-1 h-6 rounded-full bg-amber-500" />
           <h2 className="text-white text-xl font-semibold">Events</h2>
         </div>
-        <button
-          onClick={() => setShowLog(true)}
-          className="flex items-center gap-2 bg-amber-700 hover:bg-amber-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          Add Event
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowLog(true)}
+            className="flex items-center gap-2 bg-amber-700 hover:bg-amber-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <span className="text-base leading-none">+</span>
+            Add Event
+          </button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+        </div>
       </div>
 
       {entries.length === 0 ? (
@@ -130,6 +135,7 @@ export default function EventsSection({ data, userId, onRefresh }) {
           }}
         />
       )}
+      {showRaw && <RawDataModal label="events" data={data} onClose={() => setShowRaw(false)} />}
     </section>
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import RawDataModal from './RawDataModal'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceArea, ResponsiveContainer,
@@ -85,6 +86,7 @@ function RhrTooltip({ active, payload }) {
 
 export default function HeartRateSection({ data }) {
   const [range, setRange] = useState('1M')
+  const [showRaw, setShowRaw] = useState(false)
   const activeDays = RANGES.find(r => r.label === range)?.days
 
   const entries = data?.entries ?? []
@@ -115,6 +117,7 @@ export default function HeartRateSection({ data }) {
           <div className="w-1 h-6 rounded-full" style={{ background: COLOR }} />
           <h2 className="text-white text-xl font-semibold">Resting Heart Rate</h2>
         </div>
+        <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
       </div>
 
       {/* Stat cards */}
@@ -234,6 +237,7 @@ export default function HeartRateSection({ data }) {
           </>
         )}
       </div>
+      {showRaw && <RawDataModal label="heart rate" data={data} onClose={() => setShowRaw(false)} />}
     </section>
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import RawDataModal from './RawDataModal'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer,
@@ -81,6 +82,7 @@ function HrTooltip({ active, payload }) {
 
 export default function ExerciseSection({ data, userId, onRefresh }) {
   const [showLog, setShowLog] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
   const entries = data?.entries ?? []
 
   const cutoff7  = since(7)
@@ -112,13 +114,16 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
           <div className="w-1 h-6 rounded-full bg-orange-500" />
           <h2 className="text-white text-xl font-semibold">Exercise</h2>
         </div>
-        <button
-          onClick={() => setShowLog(true)}
-          className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          <span className="text-base leading-none">+</span>
-          Log Session
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowLog(true)}
+            className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <span className="text-base leading-none">+</span>
+            Log Session
+          </button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -234,6 +239,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
         </div>
       )}
 
+      {showRaw && <RawDataModal label="exercise" data={data} onClose={() => setShowRaw(false)} />}
       {showLog && (
         <LogModal
           type="exercise"

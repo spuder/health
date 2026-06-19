@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
+import RawDataModal from './RawDataModal'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceArea, ResponsiveContainer,
@@ -301,6 +302,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
   const [uploadResult, setUploadResult] = useState(null)
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
   const [reportsOpen, setReportsOpen] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
   const fileInputRef = useRef(null)
   const entries = data?.entries ?? []
   const markers = data?.markers ?? {}
@@ -386,6 +388,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
         </div>
         <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={handlePdfUpload} />
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
@@ -534,7 +537,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
           ))}
         </div>
       )}
-
+      {showRaw && <RawDataModal label="labs" data={{ blood: data, reports }} onClose={() => setShowRaw(false)} />}
     </section>
   )
 }

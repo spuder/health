@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api'
 import WeightChart from './WeightChart'
 import ImportPanel from './ImportPanel'
+import RawDataModal from './RawDataModal'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -162,6 +163,7 @@ function MetricCard({ label, value, unit, category, delta, deltaLabel, sublabel,
 
 export default function BodySection({ data, events, userId, onRefresh }) {
   const [showImport, setShowImport] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
 
   const entries = data?.entries ?? []
 
@@ -190,6 +192,7 @@ export default function BodySection({ data, events, userId, onRefresh }) {
             <span className="text-base leading-none">🍎</span>
             Sync
           </button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
         </div>
       </div>
 
@@ -240,6 +243,7 @@ export default function BodySection({ data, events, userId, onRefresh }) {
           }}
         />
       )}
+      {showRaw && <RawDataModal label="body" data={data} onClose={() => setShowRaw(false)} />}
     </section>
   )
 }

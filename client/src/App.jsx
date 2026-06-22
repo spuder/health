@@ -8,8 +8,9 @@ import ExerciseSection from './components/ExerciseSection'
 import HeartRateSection from './components/HeartRateSection'
 import LabsSection from './components/LabsSection'
 import EventsSection from './components/EventsSection'
+import ImportSection from './components/ImportSection'
 
-const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events']
+const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'import']
 
 // ── Onboarding (no users yet) ────────────────────────────────
 function OnboardingScreen() {
@@ -186,6 +187,7 @@ function Dashboard() {
             <HeartRateSection data={heartrateData} />
             <LabsSection     data={bloodData}     reports={labReports?.reports ?? []} userId={currentUserId} onRefresh={loadAll} />
             <EventsSection   data={eventsData}    userId={currentUserId} onRefresh={loadAll} />
+            <ImportSection   userId={currentUserId} onRefresh={loadAll} />
           </>
         )}
       </main>

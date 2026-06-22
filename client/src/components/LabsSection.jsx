@@ -298,12 +298,10 @@ const STATUS_FILTERS = [
 const SOURCE_LABEL = { blood_panel: 'Blood Panel', inbody: 'InBody Scan', other: 'Lab Report' }
 
 export default function LabsSection({ data, reports = [], userId, onRefresh }) {
-  const [uploading, setUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState(null)
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
+  const [searchQuery, setSearchQuery] = useState('')
   const [reportsOpen, setReportsOpen] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
-  const fileInputRef = useRef(null)
   const entries = data?.entries ?? []
   const markers = data?.markers ?? {}
 
@@ -323,7 +321,10 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
     })
   }
 
+  const normalizedSearch = searchQuery.trim().toLowerCase().replace(/\s+/g, '_')
+
   function isVisible(key) {
+    if (normalizedSearch && !key.toLowerCase().includes(normalizedSearch) && !toTitle(key).toLowerCase().includes(searchQuery.trim().toLowerCase())) return false
     const status = getMarkerStatus(key, entries, markers)
     // Markers with no range config have no status — always show them
     if (status === null) return true
@@ -349,35 +350,6 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
   const otherKeys = sortByStatus(allMarkerKeys.filter(k => !ALL_CATEGORIZED.has(k) && isVisible(k)))
   if (otherKeys.length) sections.push({ label: 'Other', color: '#64748b', keys: otherKeys })
 
-  async function handlePdfUpload(e) {
-    const files = [...(e.target.files ?? [])]
-    if (!files.length) return
-    e.target.value = ''
-
-    setUploading(true)
-    setUploadResult(null)
-    let totalCount = 0
-    const allMarkers = []
-    const errors = []
-    for (const file of files) {
-      try {
-        const result = await api.importLabsPdf(userId, file)
-        totalCount += result.count ?? 0
-        allMarkers.push(...(result.markers_found ?? []))
-      } catch (err) {
-        const msg = err.message?.startsWith('Duplicate:') ? `${file.name} — already imported` : `${file.name}: ${err.message}`
-        errors.push(msg)
-      }
-    }
-    if (errors.length && totalCount === 0) {
-      setUploadResult({ error: errors.join('; ') })
-    } else {
-      setUploadResult({ ok: true, count: totalCount, markers_found: [...new Set(allMarkers)], files: files.length, errors })
-      onRefresh()
-    }
-    setUploading(false)
-  }
-
   return (
     <section id="labs" className="mb-16">
       {/* Header row */}
@@ -387,71 +359,54 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
           <h2 className="text-white text-xl font-semibold">Labs</h2>
         </div>
         <div className="flex items-center gap-2">
-          <input ref={fileInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={handlePdfUpload} />
           <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-2 bg-[#0d1422] hover:bg-[#141d2e] disabled:opacity-50 disabled:cursor-not-allowed border border-[#1d2a3e] hover:border-[#2d3d58] text-[#94a3b8] hover:text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            {uploading ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                Parsing…
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                Upload PDF
-              </>
-            )}
-          </button>
         </div>
       </div>
 
-      {/* Status filter toggles */}
+      {/* Search + status filter toggles */}
       {allMarkerKeys.length > 0 && (
-        <div className="flex items-center gap-2 mb-6">
-          {STATUS_FILTERS.map(f => {
-            const active = activeFilters.has(f.id)
-            return (
+        <div className="flex flex-col gap-3 mb-6">
+          <div className="relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#475569] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7" strokeWidth="2" />
+              <line x1="16.5" y1="16.5" x2="22" y2="22" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search markers…"
+              className="w-full bg-[#111827] border border-[#1d2a3e] hover:border-[#2d3d58] focus:border-[#4f6080] text-[#cbd5e1] placeholder-[#475569] text-sm rounded-xl pl-10 pr-10 py-2.5 outline-none transition-colors"
+            />
+            {searchQuery && (
               <button
-                key={f.id}
-                onClick={() => toggleFilter(f.id)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
-                  active
-                    ? f.activeClass
-                    : 'border-[#1d2a3e] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#2d3d58]'
-                }`}
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#475569] hover:text-[#94a3b8] transition-colors"
               >
-                {f.label}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-            )
-          })}
-        </div>
-      )}
-
-      {uploadResult && (
-        <div className={`mb-4 px-4 py-3 rounded-xl border text-sm flex items-start justify-between gap-3 ${
-          uploadResult.error
-            ? 'bg-red-950 border-red-800 text-red-300'
-            : 'bg-emerald-950 border-emerald-800 text-emerald-300'
-        }`}>
-          {uploadResult.error ? (
-            <span>⚠ {uploadResult.error}</span>
-          ) : (
-            <span>
-              Imported {uploadResult.count} metric{uploadResult.count !== 1 ? 's' : ''} across {uploadResult.files} file{uploadResult.files !== 1 ? 's' : ''}
-              {uploadResult.markers_found.length > 0 && ` — ${uploadResult.markers_found.join(', ')}`}
-              {uploadResult.errors?.length > 0 && ` (${uploadResult.errors.length} failed)`}
-            </span>
-          )}
-          <button onClick={() => setUploadResult(null)} className="opacity-50 hover:opacity-100 shrink-0">✕</button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {STATUS_FILTERS.map(f => {
+              const active = activeFilters.has(f.id)
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => toggleFilter(f.id)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                    active
+                      ? f.activeClass
+                      : 'border-[#1d2a3e] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#2d3d58]'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -507,7 +462,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
         </div>
       ) : sections.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-[#2d3d58] text-sm">
-          No markers match the selected filters
+          {searchQuery ? `No markers match "${searchQuery}"` : 'No markers match the selected filters'}
         </div>
       ) : (
         <div className="flex flex-col gap-8">

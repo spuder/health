@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
 import WeightChart from './WeightChart'
+import LogModal from './LogModal'
 import ImportPanel from './ImportPanel'
 import RawDataModal from './RawDataModal'
 import {
@@ -162,8 +163,9 @@ function MetricCard({ label, value, unit, category, delta, deltaLabel, sublabel,
 }
 
 export default function BodySection({ data, events, userId, onRefresh }) {
+  const [showLog, setShowLog]       = useState(false)
   const [showImport, setShowImport] = useState(false)
-  const [showRaw, setShowRaw] = useState(false)
+  const [showRaw, setShowRaw]       = useState(false)
 
   const entries = data?.entries ?? []
 
@@ -185,6 +187,13 @@ export default function BodySection({ data, events, userId, onRefresh }) {
           <h2 className="text-white text-xl font-semibold">Body</h2>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowLog(true)}
+            className="flex items-center gap-2 bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <span className="text-base leading-none">+</span>
+            Log Entry
+          </button>
           <button
             onClick={() => setShowImport(true)}
             className="flex items-center gap-2 bg-[#0d1422] hover:bg-[#1d2a3e] border border-[#2d3d58] text-[#94a3b8] text-sm font-medium px-4 py-2 rounded-lg transition-colors"
@@ -240,6 +249,18 @@ export default function BodySection({ data, events, userId, onRefresh }) {
           onClose={() => {
             setShowImport(false)
             onRefresh()
+          }}
+        />
+      )}
+      {showLog && (
+        <LogModal
+          type="body"
+          heightInches={data?.height_inches}
+          onClose={() => setShowLog(false)}
+          onSave={async (entry) => {
+            await api.logBody(userId, entry)
+            onRefresh()
+            setShowLog(false)
           }}
         />
       )}

@@ -8,6 +8,7 @@ const NAV = [
   { id: 'heartrate', label: 'Heart Rate', icon: '❤️',  accent: '#f43f5e' },
   { id: 'labs',      label: 'Labs',      icon: '🧪',  accent: '#34d399' },
   { id: 'events',    label: 'Events',    icon: '📅',  accent: '#f59e0b' },
+  { id: 'import',    label: 'Import',    icon: '↑',   accent: '#a78bfa' },
 ]
 
 export default function Sidebar({ active, onNav, isOpen, onClose }) {

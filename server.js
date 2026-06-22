@@ -6,8 +6,8 @@ import fs from 'fs'
 import crypto from 'crypto'
 import { fileURLToPath } from 'url'
 import multer from 'multer'
+
 import Anthropic from '@anthropic-ai/sdk'
-import { PDFParse } from 'pdf-parse'
 import { getDb, readUsers, writeUsers, DATA_DIR } from './db.js'
 
 if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
@@ -590,7 +590,9 @@ app.get('/api/:userId/heartrate', requireUser, (req, res) => {
 // 3. Upsert every metric into the metrics table (source = 'pdf_import')
 // ─────────────────────────────────────────────────────────────
 
-const LAB_SYSTEM_PROMPT = `You are a health data parser. Extract every health metric AND reference range from the report text provided.
+const LAB_SYSTEM_PROMPT = `You are a health data parser. Extract every health metric AND reference range from the report text provided. The text may be raw PDF extraction and appear garbled or out of order — do your best to find the numbers regardless.
+
+You MUST always respond with valid JSON only. Never write natural language. Never say you cannot find data. If no metrics are found, return the JSON structure with empty metrics object.
 
 Return ONLY valid JSON — no markdown, no explanation — in this exact shape:
 {
@@ -667,7 +669,7 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
 })
 
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No PDF uploaded' })
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
   // ── 0. Duplicate check ────────────────────────────────────
   const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
@@ -677,58 +679,65 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
     return res.status(409).json({ error: `Duplicate: this PDF was already imported (report from ${existing.date})` })
   }
 
-  // ── 1. Extract text ───────────────────────────────────────
-  let text
-  try {
-    const parser = new PDFParse({ data: req.file.buffer })
-    const result = await parser.getText()
-    text = result.text?.trim()
-  } catch (err) {
-    console.error('[labs-pdf] pdf-parse error:', err)
-    return res.status(422).json({ error: `Could not extract PDF text: ${err.message}` })
-  }
-
-  if (!text) {
-    return res.status(422).json({ error: 'No selectable text found in PDF. Scanned/image-only PDFs are not supported.' })
-  }
-
-  console.log('[labs-pdf] Extracted text (first 2000 chars):\n', text.slice(0, 2000))
-
-  // ── 2. Parse with Claude ──────────────────────────────────
+  // ── 1. Send PDF directly to Claude ───────────────────────
   let parsed
   try {
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-7',
+      model: 'claude-opus-4-8',
       max_tokens: 1024,
       system: LAB_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: text }],
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: req.file.buffer.toString('base64'),
+            },
+          },
+          {
+            type: 'text',
+            text: 'Extract all health metrics from this health report and return only the JSON.',
+          },
+        ],
+      }],
     })
 
     const raw = msg.content[0].text.trim()
     const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     parsed = JSON.parse(jsonStr)
-    console.log('[labs-pdf] Claude extracted:', JSON.stringify(parsed, null, 2))
   } catch (err) {
     console.error('[labs-pdf] Claude parse error:', err)
     return res.status(500).json({ error: `AI parsing failed: ${err.message}` })
   }
 
-  const { date, metrics } = parsed
-  const validMetrics = Object.entries(metrics ?? {})
+  // ── Phase 1: debug — print result, skip DB write ─────────
+  console.log('[labs-pdf] Claude OCR result:')
+  console.log(JSON.stringify(parsed, null, 2))
+
+  res.json({ ok: true, debug: true, parsed })
+})
+
+// ─────────────────────────────────────────────────────────────
+// Confirm OCR import  POST /api/:userId/import/labs-confirm
+//
+// Accepts pre-parsed JSON from the client (after user reviews/toggles).
+// Writes selected metrics + reference ranges to DB.
+// ─────────────────────────────────────────────────────────────
+
+app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
+  const { date, source_type, metrics, reference_ranges } = req.body
+  if (!date || !metrics) return res.status(400).json({ error: 'date and metrics are required' })
+
+  const validMetrics = Object.entries(metrics)
     .filter(([, v]) => v != null && !isNaN(Number(v)))
 
-  if (!validMetrics.length) {
-    return res.status(422).json({ error: 'No numeric metrics found in this PDF.' })
-  }
+  if (!validMetrics.length) return res.status(422).json({ error: 'No numeric metrics to save' })
 
-  // ── 3. Save PDF to disk ───────────────────────────────────
-  const pdfDir = path.join(DATA_DIR, 'pdfs')
-  if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true })
-  const filename = `${req.params.userId}_${date}_${Date.now()}.pdf`
-  fs.writeFileSync(path.join(pdfDir, filename), req.file.buffer)
-
-  // ── 4. Upsert into DB ─────────────────────────────────────
   const db = getDb(req.params.userId)
+
   const upsert = db.prepare(`
     INSERT INTO metrics (date, metric, value, source, notes)
     VALUES (@date, @metric, @value, @source, @notes)
@@ -754,32 +763,21 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
       for (const [metric, value] of validMetrics) {
         upsert.run({ date, metric, value: Number(value), source: 'pdf_import', notes: null })
       }
-
-      const ranges = parsed.reference_ranges ?? {}
-      for (const [metric, { low, high }] of Object.entries(ranges)) {
+      for (const [metric, { low, high }] of Object.entries(reference_ranges ?? {})) {
         if (low == null && high == null) continue
         rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
       }
-
       db.prepare(`
-        INSERT INTO lab_reports (date, filename, file_hash, source_type, markers_json)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(date, filename, fileHash, parsed.source_type ?? 'other', JSON.stringify(markerNames))
+        INSERT INTO lab_reports (date, filename, source_type, markers_json)
+        VALUES (?, ?, ?, ?)
+      `).run(date, 'ocr_import', source_type ?? 'other', JSON.stringify(markerNames))
     })()
-    const rangeCount = Object.keys(parsed.reference_ranges ?? {}).length
-    console.log(`[labs-pdf] Saved ${validMetrics.length} metrics, ${rangeCount} ranges, PDF: ${filename}`)
+    console.log(`[labs-confirm] Saved ${validMetrics.length} metrics for ${req.params.userId}`)
+    res.json({ ok: true, count: validMetrics.length, markers_found: markerNames })
   } catch (err) {
-    console.error('[labs-pdf] DB write error:', err)
-    return res.status(500).json({ error: `Database write failed: ${err.message}` })
+    console.error('[labs-confirm] DB write error:', err)
+    res.status(500).json({ error: `Database write failed: ${err.message}` })
   }
-
-  res.json({
-    ok: true,
-    date,
-    source_type: parsed.source_type ?? 'other',
-    markers_found: markerNames,
-    count: validMetrics.length,
-  })
 })
 
 // ─────────────────────────────────────────────────────────────

@@ -48,12 +48,19 @@ export const api = {
   getLabReports:  (userId)     => req(`/${userId}/lab-reports`),
   labReportPdfUrl:(userId, id) => `/api/${userId}/lab-reports/${id}/pdf`,
 
+  confirmLabsImport: (userId, data) =>
+    req(`/${userId}/import/labs-confirm`, { method: 'POST', body: JSON.stringify(data) }),
+
   importLabsPdf: async (userId, file) => {
     const form = new FormData()
     form.append('pdf', file)
     const res = await fetch(`/api/${userId}/import/labs-pdf`, { method: 'POST', body: form })
     const json = await res.json()
-    if (!res.ok) throw new Error(json.error ?? `Upload failed (${res.status})`)
+    if (!res.ok) {
+      const err = new Error(json.error ?? `Upload failed (${res.status})`)
+      err.debug = json.debug
+      throw err
+    }
     return json
   },
 }

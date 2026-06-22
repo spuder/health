@@ -49,7 +49,7 @@ function pivotMetrics(rows) {
     if (!byDate[row.date]) byDate[row.date] = { date: row.date }
     byDate[row.date][row.metric] = row.value
     byDate[row.date].source = row.source
-    byDate[row.date].notes  = row.notes
+    byDate[row.date].notes = row.notes
   }
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
 }
@@ -63,7 +63,7 @@ app.get('/api/users', (req, res) => {
 })
 
 app.post('/api/users', (req, res) => {
-  const { name, color, initials, height_inches } = req.body
+  const { name, color, initials, height_inches, birth_year } = req.body
   if (!name) return res.status(400).json({ error: 'name is required' })
 
   const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -76,15 +76,26 @@ app.post('/api/users', (req, res) => {
   const user = {
     id,
     name,
-    color:         color         || '#7c3aed',
-    initials:      initials      || name.slice(0, 2).toUpperCase(),
+    color: color || '#7c3aed',
+    initials: initials || name.slice(0, 2).toUpperCase(),
     height_inches: height_inches || null,
+    birth_year: birth_year || null,
   }
   users.push(user)
   writeUsers(users)
   getDb(id)  // init DB immediately
 
   res.json({ ok: true, user })
+})
+
+app.patch('/api/users/:userId', requireUser, (req, res) => {
+  const users = readUsers()
+  const idx = users.findIndex(u => u.id === req.params.userId)
+  const { birth_year, height_inches } = req.body
+  if (birth_year    != null) users[idx].birth_year    = birth_year
+  if (height_inches != null) users[idx].height_inches = height_inches
+  writeUsers(users)
+  res.json({ ok: true, user: users[idx] })
 })
 
 app.delete('/api/users/:userId', requireUser, (req, res) => {
@@ -102,7 +113,10 @@ const BODY_METRICS = [
   'lean_mass', 'visceral_fat', 'bmr', 'total_body_water',
 ]
 
-const EXERCISE_METRICS = ['exercise_minutes', 'workout_count', 'hr_hard_minutes']
+const EXERCISE_METRICS = [
+  'exercise_minutes', 'workout_count',
+  'hr_z1_min', 'hr_z2_min', 'hr_z3_min', 'hr_z4_min', 'hr_z5_min',
+]
 
 const HEARTRATE_METRICS = ['resting_heart_rate', 'hrv', 'heart_rate']
 
@@ -135,10 +149,10 @@ app.post('/api/:userId/body', requireUser, (req, res) => {
 
   const insertAll = db.transaction(() => {
     const base = { date, source, notes: notes ?? null }
-    if (weight               != null) upsert.run({ ...base, metric: 'weight',               value: weight })
-    if (bmi                  != null) upsert.run({ ...base, metric: 'bmi',                  value: bmi })
+    if (weight != null) upsert.run({ ...base, metric: 'weight', value: weight })
+    if (bmi != null) upsert.run({ ...base, metric: 'bmi', value: bmi })
     if (skeletal_muscle_mass != null) upsert.run({ ...base, metric: 'skeletal_muscle_mass', value: skeletal_muscle_mass })
-    if (visceral_fat         != null) upsert.run({ ...base, metric: 'visceral_fat',          value: visceral_fat })
+    if (visceral_fat != null) upsert.run({ ...base, metric: 'visceral_fat', value: visceral_fat })
   })
 
   insertAll()
@@ -162,72 +176,72 @@ const SLEEP_METRICS = ['sleep_hours', 'sleep_quality', 'deep_sleep_hours', 'rem_
 // range_low/high = outer boundary (Average zone). optimal_low/high = inner target (Optimal zone).
 const BLOOD_MARKERS = {
   // Hormones — Rythm Health uses optimization targets, not standard lab population ranges
-  testosterone:               { unit: 'ng/dL',    range_low: 300,  range_high: 1000, optimal_low: 500,  optimal_high: 900  },
-  total_testosterone:         { unit: 'ng/dL',    range_low: 300,  range_high: 1000, optimal_low: 500,  optimal_high: 900  },
-  free_testosterone:          { unit: 'pg/mL',    range_low: 46,   range_high: 224,  optimal_low: 120,  optimal_high: 180  },
-  estrogen:                   { unit: 'pg/mL',    range_low: 10,   range_high: 50,   optimal_low: 20,   optimal_high: 40   },
-  estradiol:                  { unit: 'pg/mL',    range_low: 10,   range_high: 50,   optimal_low: 20,   optimal_high: 40   },
-  shbg:                       { unit: 'nmol/L',   range_low: 10,   range_high: 57,   optimal_low: 20,   optimal_high: 40   },
-  dhea_s:                     { unit: 'µg/dL',    range_low: 80,   range_high: 560,  optimal_low: 200,  optimal_high: 450  },
-  cortisol:                   { unit: 'µg/dL',    range_low: 6,    range_high: 23,   optimal_low: 10,   optimal_high: 18   },
-  igf1:                       { unit: 'ng/mL',    range_low: 100,  range_high: 303,  optimal_low: 150,  optimal_high: 250  },
-  psa:                        { unit: 'ng/mL',    range_low: 0,    range_high: 4,    optimal_low: 0,    optimal_high: 2.5  },
+  testosterone: { unit: 'ng/dL', range_low: 300, range_high: 1000, optimal_low: 500, optimal_high: 900 },
+  total_testosterone: { unit: 'ng/dL', range_low: 300, range_high: 1000, optimal_low: 500, optimal_high: 900 },
+  free_testosterone: { unit: 'pg/mL', range_low: 46, range_high: 224, optimal_low: 120, optimal_high: 180 },
+  estrogen: { unit: 'pg/mL', range_low: 10, range_high: 50, optimal_low: 20, optimal_high: 40 },
+  estradiol: { unit: 'pg/mL', range_low: 10, range_high: 50, optimal_low: 20, optimal_high: 40 },
+  shbg: { unit: 'nmol/L', range_low: 10, range_high: 57, optimal_low: 20, optimal_high: 40 },
+  dhea_s: { unit: 'µg/dL', range_low: 80, range_high: 560, optimal_low: 200, optimal_high: 450 },
+  cortisol: { unit: 'µg/dL', range_low: 6, range_high: 23, optimal_low: 10, optimal_high: 18 },
+  igf1: { unit: 'ng/mL', range_low: 100, range_high: 303, optimal_low: 150, optimal_high: 250 },
+  psa: { unit: 'ng/mL', range_low: 0, range_high: 4, optimal_low: 0, optimal_high: 2.5 },
   // Thyroid
-  tsh:                        { unit: 'uIU/mL',   range_low: 0.4,  range_high: 4.0,  optimal_low: 1.0,  optimal_high: 2.5  },
-  free_t3:                    { unit: 'pg/mL',    range_low: 2.0,  range_high: 4.4,  optimal_low: 3.0,  optimal_high: 4.0  },
-  free_t4:                    { unit: 'ng/dL',    range_low: 0.8,  range_high: 1.8,  optimal_low: 1.1,  optimal_high: 1.5  },
+  tsh: { unit: 'uIU/mL', range_low: 0.4, range_high: 4.0, optimal_low: 1.0, optimal_high: 2.5 },
+  free_t3: { unit: 'pg/mL', range_low: 2.0, range_high: 4.4, optimal_low: 3.0, optimal_high: 4.0 },
+  free_t4: { unit: 'ng/dL', range_low: 0.8, range_high: 1.8, optimal_low: 1.1, optimal_high: 1.5 },
   // Lipids — Rythm Health uses stricter optimal targets than standard labs
-  total_cholesterol:          { unit: 'mg/dL',    range_low: 0,    range_high: 200,  optimal_low: 0,    optimal_high: 150  },
-  ldl:                        { unit: 'mg/dL',    range_low: 0,    range_high: 120,  optimal_low: 0,    optimal_high: 80   },
-  hdl:                        { unit: 'mg/dL',    range_low: 40,   range_high: 100,  optimal_low: 60,   optimal_high: 100  },
-  triglycerides:              { unit: 'mg/dL',    range_low: 0,    range_high: 150,  optimal_low: 0,    optimal_high: 100  },
-  apob:                       { unit: 'mg/dL',    range_low: 0,    range_high: 90,   optimal_low: 0,    optimal_high: 70   },
-  remnant_cholesterol:        { unit: 'mg/dL',    range_low: 0,    range_high: 30,   optimal_low: 0,    optimal_high: 18   },
-  triglycerides_hdl_ratio:    { unit: '',         range_low: 0,    range_high: 2.0,  optimal_low: 0,    optimal_high: 1.5  },
-  total_cholesterol_hdl_ratio:{ unit: '',         range_low: 0,    range_high: 3.5,  optimal_low: 0,    optimal_high: 3.0  },
-  ldl_apob_ratio:             { unit: '',         range_low: 1.0,  range_high: null, optimal_low: 1.2,  optimal_high: null },
+  total_cholesterol: { unit: 'mg/dL', range_low: 0, range_high: 200, optimal_low: 0, optimal_high: 150 },
+  ldl: { unit: 'mg/dL', range_low: 0, range_high: 120, optimal_low: 0, optimal_high: 80 },
+  hdl: { unit: 'mg/dL', range_low: 40, range_high: 100, optimal_low: 60, optimal_high: 100 },
+  triglycerides: { unit: 'mg/dL', range_low: 0, range_high: 150, optimal_low: 0, optimal_high: 100 },
+  apob: { unit: 'mg/dL', range_low: 0, range_high: 90, optimal_low: 0, optimal_high: 70 },
+  remnant_cholesterol: { unit: 'mg/dL', range_low: 0, range_high: 30, optimal_low: 0, optimal_high: 18 },
+  triglycerides_hdl_ratio: { unit: '', range_low: 0, range_high: 2.0, optimal_low: 0, optimal_high: 1.5 },
+  total_cholesterol_hdl_ratio: { unit: '', range_low: 0, range_high: 3.5, optimal_low: 0, optimal_high: 3.0 },
+  ldl_apob_ratio: { unit: '', range_low: 1.0, range_high: null, optimal_low: 1.2, optimal_high: null },
   // Blood sugar
-  glucose:                    { unit: 'mg/dL',    range_low: 70,   range_high: 99,   optimal_low: 75,   optimal_high: 90   },
-  hba1c:                      { unit: '%',        range_low: 0,    range_high: 5.7,  optimal_low: 0,    optimal_high: 5.2  },
-  fructosamine:               { unit: 'umol/L',   range_low: 200,  range_high: 285,  optimal_low: 200,  optimal_high: 270  },
+  glucose: { unit: 'mg/dL', range_low: 70, range_high: 99, optimal_low: 75, optimal_high: 90 },
+  hba1c: { unit: '%', range_low: 0, range_high: 5.7, optimal_low: 0, optimal_high: 5.2 },
+  fructosamine: { unit: 'umol/L', range_low: 200, range_high: 285, optimal_low: 200, optimal_high: 270 },
   // Vitamins & minerals
-  vitamin_d:                  { unit: 'ng/mL',    range_low: 30,   range_high: 100,  optimal_low: 50,   optimal_high: 80   },
-  vitamin_b12:                { unit: 'pg/mL',    range_low: 200,  range_high: 900,  optimal_low: 400,  optimal_high: 900  },
-  ferritin:                   { unit: 'ng/mL',    range_low: 30,   range_high: 300,  optimal_low: 100,  optimal_high: 200  },
-  iron:                       { unit: 'µg/dL',    range_low: 60,   range_high: 170,  optimal_low: 80,   optimal_high: 130  },
-  magnesium:                  { unit: 'mg/dL',    range_low: 1.7,  range_high: 2.2,  optimal_low: 1.9,  optimal_high: 2.1  },
-  calcium:                    { unit: 'mg/dL',    range_low: 8.5,  range_high: 10.5, optimal_low: 9.0,  optimal_high: 10.0 },
+  vitamin_d: { unit: 'ng/mL', range_low: 30, range_high: 100, optimal_low: 50, optimal_high: 80 },
+  vitamin_b12: { unit: 'pg/mL', range_low: 200, range_high: 900, optimal_low: 400, optimal_high: 900 },
+  ferritin: { unit: 'ng/mL', range_low: 30, range_high: 300, optimal_low: 100, optimal_high: 200 },
+  iron: { unit: 'µg/dL', range_low: 60, range_high: 170, optimal_low: 80, optimal_high: 130 },
+  magnesium: { unit: 'mg/dL', range_low: 1.7, range_high: 2.2, optimal_low: 1.9, optimal_high: 2.1 },
+  calcium: { unit: 'mg/dL', range_low: 8.5, range_high: 10.5, optimal_low: 9.0, optimal_high: 10.0 },
   // Inflammation
-  crp:                        { unit: 'mg/L',     range_low: 0,    range_high: 3.0,  optimal_low: 0,    optimal_high: 1.0  },
-  hscrp:                      { unit: 'mg/L',     range_low: 0,    range_high: 1.0,  optimal_low: 0,    optimal_high: 0.5  },
-  homocysteine:               { unit: 'µmol/L',   range_low: 0,    range_high: 15,   optimal_low: 0,    optimal_high: 9    },
+  crp: { unit: 'mg/L', range_low: 0, range_high: 3.0, optimal_low: 0, optimal_high: 1.0 },
+  hscrp: { unit: 'mg/L', range_low: 0, range_high: 1.0, optimal_low: 0, optimal_high: 0.5 },
+  homocysteine: { unit: 'µmol/L', range_low: 0, range_high: 15, optimal_low: 0, optimal_high: 9 },
   // CBC
-  white_blood_cells:          { unit: '×10³/µL',  range_low: 4.5,  range_high: 11.0, optimal_low: 5.0,  optimal_high: 7.0  },
-  red_blood_cells:            { unit: '×10⁶/µL',  range_low: 4.5,  range_high: 5.9,  optimal_low: 4.7,  optimal_high: 5.5  },
-  hemoglobin:                 { unit: 'g/dL',     range_low: 13.5, range_high: 17.5, optimal_low: 14.5, optimal_high: 17.0 },
-  hematocrit:                 { unit: '%',        range_low: 41,   range_high: 53,   optimal_low: 43,   optimal_high: 50   },
-  platelets:                  { unit: '×10³/µL',  range_low: 150,  range_high: 400,  optimal_low: 150,  optimal_high: 350  },
-  neutrophils:                { unit: '%',        range_low: 40,   range_high: 70,   optimal_low: 50,   optimal_high: 65   },
-  lymphocytes:                { unit: '%',        range_low: 20,   range_high: 40,   optimal_low: 25,   optimal_high: 38   },
-  monocytes:                  { unit: '%',        range_low: 2,    range_high: 10,   optimal_low: 3,    optimal_high: 8    },
-  eosinophils:                { unit: '%',        range_low: 0,    range_high: 6,    optimal_low: 0,    optimal_high: 4    },
-  basophils:                  { unit: '%',        range_low: 0,    range_high: 2,    optimal_low: 0,    optimal_high: 1    },
+  white_blood_cells: { unit: '×10³/µL', range_low: 4.5, range_high: 11.0, optimal_low: 5.0, optimal_high: 7.0 },
+  red_blood_cells: { unit: '×10⁶/µL', range_low: 4.5, range_high: 5.9, optimal_low: 4.7, optimal_high: 5.5 },
+  hemoglobin: { unit: 'g/dL', range_low: 13.5, range_high: 17.5, optimal_low: 14.5, optimal_high: 17.0 },
+  hematocrit: { unit: '%', range_low: 41, range_high: 53, optimal_low: 43, optimal_high: 50 },
+  platelets: { unit: '×10³/µL', range_low: 150, range_high: 400, optimal_low: 150, optimal_high: 350 },
+  neutrophils: { unit: '%', range_low: 40, range_high: 70, optimal_low: 50, optimal_high: 65 },
+  lymphocytes: { unit: '%', range_low: 20, range_high: 40, optimal_low: 25, optimal_high: 38 },
+  monocytes: { unit: '%', range_low: 2, range_high: 10, optimal_low: 3, optimal_high: 8 },
+  eosinophils: { unit: '%', range_low: 0, range_high: 6, optimal_low: 0, optimal_high: 4 },
+  basophils: { unit: '%', range_low: 0, range_high: 2, optimal_low: 0, optimal_high: 1 },
   // Metabolic panel
-  sodium:                     { unit: 'mEq/L',    range_low: 136,  range_high: 145,  optimal_low: 138,  optimal_high: 142  },
-  potassium:                  { unit: 'mEq/L',    range_low: 3.5,  range_high: 5.1,  optimal_low: 4.0,  optimal_high: 4.5  },
-  creatinine:                 { unit: 'mg/dL',    range_low: 0.6,  range_high: 1.1,  optimal_low: 0.7,  optimal_high: 1.0  },
-  egfr:                       { unit: 'mL/min',   range_low: 60,   range_high: 120,  optimal_low: 90,   optimal_high: 120  },
-  bun:                        { unit: 'mg/dL',    range_low: 7,    range_high: 20,   optimal_low: 10,   optimal_high: 18   },
-  uric_acid:                  { unit: 'mg/dL',    range_low: 3.5,  range_high: 7.0,  optimal_low: 3.5,  optimal_high: 6.0  },
-  albumin:                    { unit: 'g/dL',     range_low: 3.5,  range_high: 5.0,  optimal_low: 4.0,  optimal_high: 5.0  },
-  total_protein:              { unit: 'g/dL',     range_low: 6.0,  range_high: 8.3,  optimal_low: 6.5,  optimal_high: 8.0  },
-  globulin:                   { unit: 'g/dL',     range_low: 1.5,  range_high: 3.5,  optimal_low: 2.0,  optimal_high: 3.0  },
+  sodium: { unit: 'mEq/L', range_low: 136, range_high: 145, optimal_low: 138, optimal_high: 142 },
+  potassium: { unit: 'mEq/L', range_low: 3.5, range_high: 5.1, optimal_low: 4.0, optimal_high: 4.5 },
+  creatinine: { unit: 'mg/dL', range_low: 0.6, range_high: 1.1, optimal_low: 0.7, optimal_high: 1.0 },
+  egfr: { unit: 'mL/min', range_low: 60, range_high: 120, optimal_low: 90, optimal_high: 120 },
+  bun: { unit: 'mg/dL', range_low: 7, range_high: 20, optimal_low: 10, optimal_high: 18 },
+  uric_acid: { unit: 'mg/dL', range_low: 3.5, range_high: 7.0, optimal_low: 3.5, optimal_high: 6.0 },
+  albumin: { unit: 'g/dL', range_low: 3.5, range_high: 5.0, optimal_low: 4.0, optimal_high: 5.0 },
+  total_protein: { unit: 'g/dL', range_low: 6.0, range_high: 8.3, optimal_low: 6.5, optimal_high: 8.0 },
+  globulin: { unit: 'g/dL', range_low: 1.5, range_high: 3.5, optimal_low: 2.0, optimal_high: 3.0 },
   // Liver
-  alt:                        { unit: 'U/L',      range_low: 7,    range_high: 56,   optimal_low: 7,    optimal_high: 30   },
-  ast:                        { unit: 'U/L',      range_low: 10,   range_high: 40,   optimal_low: 10,   optimal_high: 25   },
-  ggt:                        { unit: 'U/L',      range_low: 8,    range_high: 40,   optimal_low: 8,    optimal_high: 25   },
-  alkaline_phosphatase:       { unit: 'U/L',      range_low: 30,   range_high: 120,  optimal_low: 40,   optimal_high: 80   },
-  total_bilirubin:            { unit: 'mg/dL',    range_low: 0.2,  range_high: 1.2,  optimal_low: 0.2,  optimal_high: 0.8  },
+  alt: { unit: 'U/L', range_low: 7, range_high: 56, optimal_low: 7, optimal_high: 30 },
+  ast: { unit: 'U/L', range_low: 10, range_high: 40, optimal_low: 10, optimal_high: 25 },
+  ggt: { unit: 'U/L', range_low: 8, range_high: 40, optimal_low: 8, optimal_high: 25 },
+  alkaline_phosphatase: { unit: 'U/L', range_low: 30, range_high: 120, optimal_low: 40, optimal_high: 80 },
+  total_bilirubin: { unit: 'mg/dL', range_low: 0.2, range_high: 1.2, optimal_low: 0.2, optimal_high: 0.8 },
 }
 
 app.get('/api/:userId/blood', requireUser, (req, res) => {
@@ -247,9 +261,9 @@ app.get('/api/:userId/blood', requireUser, (req, res) => {
   const storedConfigs = db.prepare('SELECT * FROM marker_configs').all()
   for (const cfg of storedConfigs) {
     if (!markers[cfg.metric]) markers[cfg.metric] = {}
-    if (cfg.range_low  != null) markers[cfg.metric].range_low  = cfg.range_low
+    if (cfg.range_low != null) markers[cfg.metric].range_low = cfg.range_low
     if (cfg.range_high != null) markers[cfg.metric].range_high = cfg.range_high
-    if (cfg.unit)               markers[cfg.metric].unit       = cfg.unit
+    if (cfg.unit) markers[cfg.metric].unit = cfg.unit
   }
 
   res.json({ markers, entries: pivotMetrics(rows) })
@@ -271,7 +285,7 @@ app.post('/api/:userId/blood', requireUser, (req, res) => {
 
   const insertAll = db.transaction(() => {
     const base = { date, source, notes: notes ?? null }
-    if (testosterone  != null) upsert.run({ ...base, metric: 'testosterone',  value: testosterone })
+    if (testosterone != null) upsert.run({ ...base, metric: 'testosterone', value: testosterone })
     if (triglycerides != null) upsert.run({ ...base, metric: 'triglycerides', value: triglycerides })
   })
 
@@ -320,10 +334,10 @@ app.post('/api/:userId/sleep', requireUser, (req, res) => {
 
   db.transaction(() => {
     const base = { date, source, notes: notes ?? null }
-    if (sleep_hours      != null) upsert.run({ ...base, metric: 'sleep_hours',      value: sleep_hours })
-    if (sleep_quality    != null) upsert.run({ ...base, metric: 'sleep_quality',    value: sleep_quality })
+    if (sleep_hours != null) upsert.run({ ...base, metric: 'sleep_hours', value: sleep_hours })
+    if (sleep_quality != null) upsert.run({ ...base, metric: 'sleep_quality', value: sleep_quality })
     if (deep_sleep_hours != null) upsert.run({ ...base, metric: 'deep_sleep_hours', value: deep_sleep_hours })
-    if (rem_sleep_hours  != null) upsert.run({ ...base, metric: 'rem_sleep_hours',  value: rem_sleep_hours })
+    if (rem_sleep_hours != null) upsert.run({ ...base, metric: 'rem_sleep_hours', value: rem_sleep_hours })
   })()
 
   res.json({ ok: true })
@@ -380,34 +394,34 @@ app.get('/api/:userId/import/stats', requireUser, (req, res) => {
 
 const HAE_METRIC_MAP = {
   // Body
-  body_mass:                        'weight',
-  body_fat_percentage:              'body_fat',
-  lean_body_mass:                   'lean_mass',
-  body_mass_index:                  'bmi',
+  body_mass: 'weight',
+  body_fat_percentage: 'body_fat',
+  lean_body_mass: 'lean_mass',
+  body_mass_index: 'bmi',
   // Heart
-  heart_rate:                       'heart_rate',
-  resting_heart_rate:               'resting_heart_rate',
-  heart_rate_variability_sdnn:      'hrv',
-  heart_rate_variability:           'hrv',
+  heart_rate: 'heart_rate',
+  resting_heart_rate: 'resting_heart_rate',
+  heart_rate_variability_sdnn: 'hrv',
+  heart_rate_variability: 'hrv',
   // Activity
-  apple_exercise_time:              'exercise_minutes',
-  active_energy_burned:             'active_calories',
-  active_energy:                    'active_calories',
-  basal_energy_burned:              'resting_calories',
-  step_count:                       'steps',
-  walking_running_distance:         'distance_miles',
-  physical_effort:                  'physical_effort',
+  apple_exercise_time: 'exercise_minutes',
+  active_energy_burned: 'active_calories',
+  active_energy: 'active_calories',
+  basal_energy_burned: 'resting_calories',
+  step_count: 'steps',
+  walking_running_distance: 'distance_miles',
+  physical_effort: 'physical_effort',
   // Other vitals
-  vo2_max:                          'vo2_max',
-  blood_glucose:                    'blood_glucose',
-  blood_pressure_systolic:          'bp_systolic',
-  blood_pressure_diastolic:         'bp_diastolic',
-  blood_oxygen_saturation:          'blood_oxygen',
-  respiratory_rate:                 'respiratory_rate',
-  body_temperature:                 'body_temp_f',
+  vo2_max: 'vo2_max',
+  blood_glucose: 'blood_glucose',
+  blood_pressure_systolic: 'bp_systolic',
+  blood_pressure_diastolic: 'bp_diastolic',
+  blood_oxygen_saturation: 'blood_oxygen',
+  respiratory_rate: 'respiratory_rate',
+  body_temperature: 'body_temp_f',
   apple_sleeping_wrist_temperature: 'wrist_temp_c',
   // Sleep
-  sleep_analysis:                   'sleep_hours',
+  sleep_analysis: 'sleep_hours',
 }
 
 function convertUnit(haeMetricName, qty, units) {
@@ -416,9 +430,13 @@ function convertUnit(haeMetricName, qty, units) {
 }
 
 app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
-  const db      = getDb(req.params.userId)
+  const db = getDb(req.params.userId)
+  // Log top-level keys and any date_of_birth / me / profile field
+  const topKeys = Object.keys(req.body?.data ?? {})
+  const me = req.body?.data?.me ?? req.body?.data?.profile ?? req.body?.data?.characteristics ?? null
+  if (me || !req.user.birth_year) console.log('[import keys]', topKeys, '| me:', me)
   const metrics = req.body?.data?.metrics ?? []
-  const stats   = { imported: 0, skipped: 0 }
+  const stats = { imported: 0, skipped: 0 }
 
   const upsert = db.prepare(`
     INSERT INTO metrics (date, metric, value, source)
@@ -427,6 +445,22 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   `)
 
   const workouts = req.body?.data?.workouts ?? []
+
+  // Auto-extract birth year from HAE date_of_birth if not already set
+  const dob = req.body?.data?.me?.date_of_birth
+    ?? req.body?.data?.profile?.date_of_birth
+    ?? req.body?.data?.date_of_birth
+  if (dob && !req.user.birth_year) {
+    const year = new Date(dob).getFullYear()
+    if (year > 1900 && year < new Date().getFullYear()) {
+      const users = readUsers()
+      const idx = users.findIndex(u => u.id === req.params.userId)
+      users[idx].birth_year = year
+      writeUsers(users)
+      req.user.birth_year = year
+      console.log(`[import] auto-set birth_year=${year} for ${req.params.userId}`)
+    }
+  }
 
   const importAll = db.transaction(() => {
     for (const { name, units, data = [] } of metrics) {
@@ -445,20 +479,39 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       }
     }
 
-    // Aggregate workouts → workout_count + exercise_minutes per day
+    // Aggregate workouts → workout_count + exercise_minutes + HR zones per day
     if (workouts.length) {
+      const age   = req.user.birth_year ? new Date().getFullYear() - req.user.birth_year : null
+      const maxHR = age ? 220 - age : null
       const byDate = {}
       for (const w of workouts) {
         const date = w.start?.slice(0, 10)
         if (!date) continue
-        if (!byDate[date]) byDate[date] = { count: 0, minutes: 0 }
+        if (!byDate[date]) byDate[date] = { count: 0, minutes: 0, z: [0, 0, 0, 0, 0] }
         byDate[date].count++
-        byDate[date].minutes += w.duration ?? 0
+        byDate[date].minutes += (w.duration ?? 0) / 60  // duration is in seconds
+
+        if (maxHR && w.heartRateData?.length) {
+          for (const d of w.heartRateData) {
+            const pct = (d.Avg ?? 0) / maxHR * 100
+            if      (pct >= 90) byDate[date].z[4]++
+            else if (pct >= 80) byDate[date].z[3]++
+            else if (pct >= 70) byDate[date].z[2]++
+            else if (pct >= 60) byDate[date].z[1]++
+            else if (pct >= 50) byDate[date].z[0]++
+          }
+        }
       }
-      for (const [date, { count, minutes }] of Object.entries(byDate)) {
+      for (const [date, { count, minutes, z }] of Object.entries(byDate)) {
         upsert.run({ date, metric: 'workout_count',    value: count,               source: 'apple_health' })
         upsert.run({ date, metric: 'exercise_minutes', value: Math.round(minutes), source: 'apple_health' })
         stats.imported += 2
+        z.forEach((mins, i) => {
+          if (mins > 0) {
+            upsert.run({ date, metric: `hr_z${i + 1}_min`, value: mins, source: 'apple_health' })
+            stats.imported++
+          }
+        })
       }
     }
   })
@@ -505,7 +558,7 @@ app.post('/api/:userId/exercise', requireUser, (req, res) => {
   db.transaction(() => {
     const base = { date, source, notes: notes ?? null }
     upsert.run({ ...base, metric: 'exercise_minutes', value: exercise_minutes })
-    upsert.run({ ...base, metric: 'workout_count',    value: 1 })
+    upsert.run({ ...base, metric: 'workout_count', value: 1 })
     if (hr_hard_minutes != null) upsert.run({ ...base, metric: 'hr_hard_minutes', value: hr_hard_minutes })
   })()
 

@@ -32,11 +32,11 @@ export function UserProvider({ children }) {
     localStorage.setItem('hd_userId', userId)
   }
 
-  const addUser = async ({ name, color, initials, height_inches }) => {
+  const addUser = async ({ name, color, initials, height_inches, birth_year }) => {
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, color, initials, height_inches }),
+      body: JSON.stringify({ name, color, initials, height_inches, birth_year }),
     })
     if (!res.ok) throw new Error((await res.json()).error)
     const { user } = await res.json()
@@ -44,10 +44,20 @@ export function UserProvider({ children }) {
     return user
   }
 
+  const updateUser = async (userId, data) => {
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) throw new Error((await res.json()).error)
+    await loadUsers()
+  }
+
   const currentUser = users.find(u => u.id === currentUserId) ?? null
 
   return (
-    <UserContext.Provider value={{ users, currentUser, currentUserId, switchUser, addUser, loadUsers, loading }}>
+    <UserContext.Provider value={{ users, currentUser, currentUserId, switchUser, addUser, updateUser, loadUsers, loading }}>
       {children}
     </UserContext.Provider>
   )

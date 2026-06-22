@@ -80,32 +80,41 @@ function HrTooltip({ active, payload }) {
   )
 }
 
+const ZONES = [
+  { key: 'hr_z1_min', label: 'Z1', pct: '50–60%', color: '#64748b' },
+  { key: 'hr_z2_min', label: 'Z2', pct: '60–70%', color: '#3b82f6' },
+  { key: 'hr_z3_min', label: 'Z3', pct: '70–80%', color: '#22c55e' },
+  { key: 'hr_z4_min', label: 'Z4', pct: '80–90%', color: '#f97316' },
+  { key: 'hr_z5_min', label: 'Z5', pct: '90%+',   color: '#ef4444' },
+]
+
 export default function ExerciseSection({ data, userId, onRefresh }) {
   const [showLog, setShowLog] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
   const entries = data?.entries ?? []
 
-  const cutoff7  = since(7)
-  const last7    = entries.filter(e => new Date(e.date + 'T00:00:00') >= cutoff7)
-  const last30   = entries.slice(-30)
+  const cutoff7 = since(7)
+  const last7   = entries.filter(e => new Date(e.date + 'T00:00:00') >= cutoff7)
+  const last30  = entries.slice(-30)
 
-  // Workouts this week = sum of workout_count in last 7 days
   const workoutsThisWeek = last7.reduce((s, e) => s + (e.workout_count ?? 0), 0)
 
-  // Avg exercise minutes over last 30 days (only days with data)
-  const ex30 = last30.filter(e => e.exercise_minutes != null)
-  const avgExMins = ex30.length
-    ? Math.round(ex30.reduce((s, e) => s + e.exercise_minutes, 0) / ex30.length)
-    : null
+  const today = new Date().toISOString().slice(0, 10)
+  const todayEntry = entries.find(e => e.date === today)
+  const todayMins = todayEntry?.exercise_minutes ?? null
 
-  // Avg HR hard minutes over last 30 days
-  const hr30 = last30.filter(e => e.hr_hard_minutes != null)
-  const avgHrMins = hr30.length
-    ? Math.round(hr30.reduce((s, e) => s + e.hr_hard_minutes, 0) / hr30.length)
-    : null
+  // Per-zone avg over last 30 days (days that have any zone data)
+  const zoneDays = last30.filter(e => ZONES.some(z => e[z.key] != null))
+  const avgZoneMins = ZONES.map(z =>
+    zoneDays.length
+      ? Math.round(zoneDays.reduce((s, e) => s + (e[z.key] ?? 0), 0) / zoneDays.length)
+      : null
+  )
+  const hasZoneData = zoneDays.length > 0
+  const maxZoneAvg  = Math.max(1, ...avgZoneMins.filter(Boolean))
 
   const hasHrData = entries.some(e => e.hr_hard_minutes != null)
-  const recent = entries.slice(-60)
+  const recent    = entries.slice(-60)
 
   return (
     <section id="exercise" className="mb-16">
@@ -136,19 +145,40 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
           color="#f97316"
         />
         <StatCard
-          label="Avg Min / Day"
-          value={avgExMins}
+          label="Today"
+          value={todayMins}
           unit="min"
-          sublabel="Last 30 days"
-          color={avgExMins ? exColor(avgExMins) : '#f97316'}
+          sublabel={todayMins != null ? (todayMins >= TARGET_MINUTES ? 'Goal reached' : `${TARGET_MINUTES - todayMins} min to goal`) : 'No data yet today'}
+          color={todayMins ? exColor(todayMins) : '#f97316'}
         />
-        <StatCard
-          label="Avg HR Zone / Day"
-          value={avgHrMins}
-          unit="min"
-          sublabel="Min HR > 80% max"
-          color={avgHrMins ? hrColor(avgHrMins) : '#ef4444'}
-        />
+
+        {/* HR Zone breakdown card */}
+        <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-2">
+          <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">Avg Zone Min / Day</span>
+          {hasZoneData ? (
+            <div className="flex flex-col gap-1.5 mt-1">
+              {ZONES.map((z, i) => (
+                <div key={z.key} className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono w-5 shrink-0" style={{ color: z.color }}>{z.label}</span>
+                  <div className="flex-1 h-1.5 bg-[#1d2a3e] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${((avgZoneMins[i] ?? 0) / maxZoneAvg) * 100}%`, background: z.color, opacity: 0.8 }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-[#475569] w-8 text-right shrink-0">
+                    {avgZoneMins[i] != null ? `${avgZoneMins[i]}m` : '—'}
+                  </span>
+                </div>
+              ))}
+              <p className="text-[#2d3d58] text-[10px] mt-0.5">30-day avg · {zoneDays.length} workout days</p>
+            </div>
+          ) : (
+            <p className="text-[#2d3d58] text-xs mt-1">
+              Set your max HR in your profile, then sync workouts.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Exercise minutes bar chart */}
@@ -205,37 +235,58 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
         )}
       </div>
 
-      {/* HR zone bar chart — only shown when data exists */}
-      {hasHrData && (
+      {/* HR zone stacked bar chart */}
+      {hasZoneData && (
         <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6">
-          <p className="text-white text-sm font-medium mb-4">Min / Day HR &gt; 80% Max</p>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={recent.filter(e => e.hr_hard_minutes != null)} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barSize={9}>
+          <p className="text-white text-sm font-medium mb-4">Heart Rate Zones / Day</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={recent} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barSize={recent.length > 30 ? 5 : 9}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 tick={{ fill: '#475569', fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                interval="preserveStartEnd"
+                axisLine={false} tickLine={false} interval="preserveStartEnd"
               />
               <YAxis
                 tick={{ fill: '#475569', fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                tickCount={4}
+                axisLine={false} tickLine={false} tickCount={4}
                 tickFormatter={v => `${v}m`}
               />
-              <Tooltip content={<HrTooltip />} />
-              <ReferenceLine y={TARGET_HR_MINS} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.4} strokeWidth={1} />
-              <Bar dataKey="hr_hard_minutes" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-                {recent.filter(e => e.hr_hard_minutes != null).map((e, i) => (
-                  <Cell key={i} fill={hrColor(e.hr_hard_minutes ?? 0)} fillOpacity={0.85} />
-                ))}
-              </Bar>
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload
+                  const total = ZONES.reduce((s, z) => s + (d[z.key] ?? 0), 0)
+                  if (!total) return null
+                  return (
+                    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+                      <p className="text-[#64748b] text-xs mb-2">
+                        {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                      </p>
+                      {ZONES.slice().reverse().map(z => d[z.key] ? (
+                        <p key={z.key} className="text-xs" style={{ color: z.color }}>
+                          {z.label} ({z.pct}): {d[z.key]} min
+                        </p>
+                      ) : null)}
+                    </div>
+                  )
+                }}
+              />
+              {ZONES.map((z, i) => (
+                <Bar key={z.key} dataKey={z.key} stackId="zones" fill={z.color} fillOpacity={0.8}
+                  radius={i === 4 ? [3, 3, 0, 0] : [0, 0, 0, 0]} isAnimationActive={false} />
+              ))}
             </BarChart>
           </ResponsiveContainer>
+          <div className="flex items-center gap-4 mt-3 flex-wrap">
+            {ZONES.map(z => (
+              <div key={z.key} className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-sm" style={{ background: z.color, opacity: 0.8 }} />
+                <span className="text-[10px] text-[#475569]">{z.label} {z.pct}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

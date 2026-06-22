@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useUser } from '../context/UserContext'
+import { api } from '../api'
 
 const PALETTE = [
   '#7c3aed', '#059669', '#2563eb', '#db2777',
@@ -23,6 +24,7 @@ function AddMemberForm({ onAdd, onCancel }) {
   const [color, setColor]             = useState(PALETTE[1])
   const [heightFt, setHeightFt]       = useState('')
   const [heightIn, setHeightIn]       = useState('')
+  const [birthYear, setBirthYear]     = useState('')
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const { addUser, switchUser }       = useUser()
@@ -41,7 +43,8 @@ function AddMemberForm({ onAdd, onCancel }) {
     setLoading(true)
     setError(null)
     try {
-      const user = await addUser({ name: name.trim(), color, initials, height_inches })
+      const birth_year = birthYear ? parseInt(birthYear) : null
+      const user = await addUser({ name: name.trim(), color, initials, height_inches, birth_year })
       switchUser(user.id)
       onAdd()
     } catch (err) {
@@ -86,19 +89,24 @@ function AddMemberForm({ onAdd, onCancel }) {
         ))}
       </div>
 
-      {/* Height */}
-      <div className="flex gap-2 mb-3">
+      {/* Height + birth year */}
+      <div className="flex gap-2 mb-3 items-center">
         <input
           type="number" min="0" max="8" placeholder="ft"
           value={heightFt} onChange={e => setHeightFt(e.target.value)}
-          className="w-16 bg-[#070b12] border border-[#1d2a3e] text-white text-sm rounded-lg px-2 py-1.5 focus:border-[#7c3aed] outline-none"
+          className="w-14 bg-[#070b12] border border-[#1d2a3e] text-white text-sm rounded-lg px-2 py-1.5 focus:border-[#7c3aed] outline-none"
         />
         <input
           type="number" min="0" max="11" placeholder="in"
           value={heightIn} onChange={e => setHeightIn(e.target.value)}
-          className="w-16 bg-[#070b12] border border-[#1d2a3e] text-white text-sm rounded-lg px-2 py-1.5 focus:border-[#7c3aed] outline-none"
+          className="w-14 bg-[#070b12] border border-[#1d2a3e] text-white text-sm rounded-lg px-2 py-1.5 focus:border-[#7c3aed] outline-none"
         />
-        <span className="text-[#475569] text-xs self-center">height (optional)</span>
+        <input
+          type="number" min="1920" max={new Date().getFullYear() - 10} placeholder="year"
+          value={birthYear} onChange={e => setBirthYear(e.target.value)}
+          className="w-20 bg-[#070b12] border border-[#1d2a3e] text-white text-sm rounded-lg px-2 py-1.5 focus:border-[#7c3aed] outline-none"
+        />
+        <span className="text-[#475569] text-xs">optional</span>
       </div>
 
       {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
@@ -119,11 +127,46 @@ function AddMemberForm({ onAdd, onCancel }) {
 
 export { Avatar }
 
+function BirthYearEditor({ user, onDone }) {
+  const { updateUser } = useUser()
+  const [val, setVal] = useState(user.birth_year ?? '')
+  const [saving, setSaving] = useState(false)
+  const derivedMax = val ? 220 - (new Date().getFullYear() - parseInt(val)) : null
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    await updateUser(user.id, { birth_year: val ? parseInt(val) : null })
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <form onSubmit={handleSave} className="px-4 py-3 border-t border-[#1d2a3e]">
+      <div className="flex gap-2 items-center">
+        <input
+          autoFocus
+          type="number" min="1920" max={new Date().getFullYear() - 10} placeholder="Birth year"
+          value={val} onChange={e => setVal(e.target.value)}
+          className="w-28 bg-[#070b12] border border-[#1d2a3e] text-white text-sm rounded-lg px-3 py-1.5 focus:border-[#7c3aed] outline-none"
+        />
+        {derivedMax && <span className="text-[#475569] text-xs">→ max HR {derivedMax} bpm</span>}
+        <button type="submit" disabled={saving}
+          className="ml-auto bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-40 text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" onClick={onDone} className="text-[#475569] hover:text-white text-xs transition-colors">Cancel</button>
+      </div>
+    </form>
+  )
+}
+
 export default function ProfileSwitcher() {
   const { users, currentUser, switchUser } = useUser()
-  const [open, setOpen]     = useState(false)
-  const [adding, setAdding] = useState(false)
-  const ref                 = useRef(null)
+  const [open, setOpen]         = useState(false)
+  const [adding, setAdding]     = useState(false)
+  const [editingHR, setEditingHR] = useState(false)
+  const ref                     = useRef(null)
 
   // Close on outside click
   useEffect(() => {
@@ -139,7 +182,7 @@ export default function ProfileSwitcher() {
     <div ref={ref} className="relative">
       {/* Trigger */}
       <button
-        onClick={() => { setOpen(!open); setAdding(false) }}
+        onClick={() => { setOpen(!open); setAdding(false); setEditingHR(false) }}
         className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-[#0d1422] transition-all group"
       >
         <Avatar user={currentUser} />
@@ -176,11 +219,24 @@ export default function ProfileSwitcher() {
             ))}
           </div>
 
-          {/* Add member */}
-          {adding ? (
+          {/* Max HR / Add member */}
+          {editingHR ? (
+            <BirthYearEditor user={currentUser} onDone={() => setEditingHR(false)} />
+          ) : adding ? (
             <AddMemberForm onAdd={() => { setAdding(false); setOpen(false) }} onCancel={() => setAdding(false)} />
           ) : (
-            <div className="border-t border-[#1d2a3e] p-2">
+            <div className="border-t border-[#1d2a3e] p-2 flex flex-col gap-0.5">
+              <button
+                onClick={() => setEditingHR(true)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-[#475569] hover:text-[#94a3b8] hover:bg-[#141d2e] text-xs transition-all"
+              >
+                <span>Birth year</span>
+                <span className="font-mono text-[#2d3d58] hover:text-[#475569]">
+                  {currentUser?.birth_year
+                    ? `${currentUser.birth_year} · max ${220 - (new Date().getFullYear() - currentUser.birth_year)} bpm`
+                    : 'not set'}
+                </span>
+              </button>
               <button
                 onClick={() => setAdding(true)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[#475569] hover:text-[#94a3b8] hover:bg-[#141d2e] text-sm transition-all"

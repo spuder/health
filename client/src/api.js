@@ -9,9 +9,10 @@ async function req(path, options = {}) {
 
 export const api = {
   // ── Users ─────────────────────────────────────────────────
-  getUsers:   ()           => req('/users'),
-  addUser:    (data)       => req('/users', { method: 'POST', body: JSON.stringify(data) }),
-  deleteUser: (userId)     => req(`/users/${userId}`, { method: 'DELETE' }),
+  getUsers:    ()           => req('/users'),
+  addUser:     (data)       => req('/users', { method: 'POST',  body: JSON.stringify(data) }),
+  updateUser:  (userId, d)  => req(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  deleteUser:  (userId)     => req(`/users/${userId}`, { method: 'DELETE' }),
 
   // ── Body ──────────────────────────────────────────────────
   getBody:    (userId)     => req(`/${userId}/body`),

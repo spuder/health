@@ -134,15 +134,24 @@ export default function ImportPanel({ userId, onClose }) {
           {/* Step 2 */}
           <Step n="2" title="Configure Health Auto Export on iPhone">
             <p className="text-[#475569] text-xs mb-2">
-              Open the app → <span className="text-[#64748b]">Automations</span> → <span className="text-[#64748b]">+ New</span> → <span className="text-[#64748b]">REST API</span>
+              Open the app → <span className="text-[#64748b]">Automations</span> → <span className="text-[#64748b]">+ New</span> → <span className="text-[#64748b]">REST API</span>. Create <span className="text-[#94a3b8] font-medium">two automations</span> with the same URL — one for metrics, one for workouts.
             </p>
-            <div className="bg-[#070b12] border border-[#1d2a3e] rounded-xl px-4 py-1">
+            <p className="text-[#475569] text-[11px] font-semibold mb-1 mt-2">Automation 1 — Health Metrics</p>
+            <div className="bg-[#070b12] border border-[#1d2a3e] rounded-xl px-4 py-1 mb-3">
               <Setting label="URL"            value="← paste above"      highlight />
               <Setting label="Method"         value="POST" />
               <Setting label="Data Type"      value="Health Metrics" />
               <Setting label="Export Format"  value="JSON" />
               <Setting label="Aggregate Data" value="Enabled" />
               <Setting label="Interval"       value="Days" />
+              <Setting label="Batch Requests" value="Enabled" />
+            </div>
+            <p className="text-[#475569] text-[11px] font-semibold mb-1">Automation 2 — Workouts <span className="text-[#f97316] font-normal">(needed for exercise data)</span></p>
+            <div className="bg-[#070b12] border border-[#1d2a3e] rounded-xl px-4 py-1">
+              <Setting label="URL"            value="← same URL"         highlight />
+              <Setting label="Method"         value="POST" />
+              <Setting label="Data Type"      value="Workouts" />
+              <Setting label="Export Format"  value="JSON" />
               <Setting label="Batch Requests" value="Enabled" />
             </div>
           </Step>

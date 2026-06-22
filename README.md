@@ -14,6 +14,8 @@ Create a user in the web UI or via `GET /api/users` to list existing users. The 
 
 Configure Apple Health apps to POST data to `http://your-dashboard:3001/api/{userId}/import/apple-health`. Metrics are automatically mapped to the dashboard (e.g., `body_mass` → weight).
 
+You will need 2 exports. One for Health and One for Exercise
+
 ## Related
 
 https://github.com/nixfred/apple-health-dashboard

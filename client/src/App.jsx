@@ -14,10 +14,11 @@ const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events']
 // ── Onboarding (no users yet) ────────────────────────────────
 function OnboardingScreen() {
   const { addUser, switchUser } = useUser()
-  const [name, setName]         = useState('')
-  const [heightFt, setHeightFt] = useState('')
-  const [heightIn, setHeightIn] = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [name, setName]           = useState('')
+  const [heightFt, setHeightFt]   = useState('')
+  const [heightIn, setHeightIn]   = useState('')
+  const [birthYear, setBirthYear] = useState('')
+  const [loading, setLoading]     = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -26,8 +27,9 @@ function OnboardingScreen() {
     const height_inches = heightFt || heightIn
       ? (parseInt(heightFt || 0) * 12) + parseInt(heightIn || 0)
       : null
+    const birth_year = birthYear ? parseInt(birthYear) : null
     const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
-    const user = await addUser({ name: name.trim(), initials, color: '#7c3aed', height_inches })
+    const user = await addUser({ name: name.trim(), initials, color: '#7c3aed', height_inches, birth_year })
     switchUser(user.id)
   }
 
@@ -44,10 +46,13 @@ function OnboardingScreen() {
             <input autoFocus type="text" placeholder="Spencer" value={name} onChange={e => setName(e.target.value)} required />
           </div>
           <div>
-            <label className="text-[#94a3b8] text-xs font-medium block mb-1.5">Height <span className="text-[#475569] font-normal">(optional, for BMI)</span></label>
+            <label className="text-[#94a3b8] text-xs font-medium block mb-1.5">
+              Height & birth year <span className="text-[#475569] font-normal">(optional)</span>
+            </label>
             <div className="flex gap-2">
-              <input type="number" min="0" max="8" placeholder="5 ft" value={heightFt} onChange={e => setHeightFt(e.target.value)} style={{ width: 80 }} />
-              <input type="number" min="0" max="11" placeholder="11 in" value={heightIn} onChange={e => setHeightIn(e.target.value)} style={{ width: 80 }} />
+              <input type="number" min="0" max="8" placeholder="5 ft" value={heightFt} onChange={e => setHeightFt(e.target.value)} style={{ width: 72 }} />
+              <input type="number" min="0" max="11" placeholder="11 in" value={heightIn} onChange={e => setHeightIn(e.target.value)} style={{ width: 72 }} />
+              <input type="number" min="1920" max={new Date().getFullYear() - 10} placeholder="1990" value={birthYear} onChange={e => setBirthYear(e.target.value)} style={{ width: 88 }} />
             </div>
           </div>
           <button type="submit" disabled={!name.trim() || loading}

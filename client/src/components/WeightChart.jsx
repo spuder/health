@@ -41,12 +41,11 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-function CustomDot({ cx, cy, payload, events }) {
+function CustomDot({ cx, cy, payload, events, alwaysShow }) {
   const hasEvent = events?.some(e => e.date === payload?.date)
-  if (!hasEvent) return null
-  return (
-    <circle cx={cx} cy={cy} r={5} fill="#a78bfa" stroke="#070b12" strokeWidth={2} />
-  )
+  if (hasEvent) return <circle cx={cx} cy={cy} r={5} fill="#a78bfa" stroke="#070b12" strokeWidth={2} />
+  if (alwaysShow) return <circle cx={cx} cy={cy} r={3} fill="#a78bfa" strokeWidth={0} />
+  return null
 }
 
 export default function WeightChart({ entries, events = [] }) {
@@ -54,6 +53,7 @@ export default function WeightChart({ entries, events = [] }) {
   const activeDays = RANGES.find(r => r.label === range)?.days
 
   const filtered = useMemo(() => filterByRange(entries.filter(e => e.weight != null), activeDays), [entries, activeDays])
+  const showDots = filtered.length <= 60
 
   const eventDates = useMemo(() => {
     const visible = events.filter(e => {
@@ -171,7 +171,7 @@ export default function WeightChart({ entries, events = [] }) {
             stroke="#a78bfa"
             strokeWidth={2}
             fill={`url(#${gradientId})`}
-            dot={(props) => <CustomDot {...props} events={eventDates} />}
+            dot={showDots ? (props) => <CustomDot {...props} events={eventDates} alwaysShow /> : false}
             activeDot={{ r: 5, fill: '#a78bfa', stroke: '#070b12', strokeWidth: 2 }}
           />
         </AreaChart>

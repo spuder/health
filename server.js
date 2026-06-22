@@ -92,7 +92,7 @@ app.patch('/api/users/:userId', requireUser, (req, res) => {
   const users = readUsers()
   const idx = users.findIndex(u => u.id === req.params.userId)
   const { birth_year, height_inches } = req.body
-  if (birth_year    != null) users[idx].birth_year    = birth_year
+  if (birth_year != null) users[idx].birth_year = birth_year
   if (height_inches != null) users[idx].height_inches = height_inches
   writeUsers(users)
   res.json({ ok: true, user: users[idx] })
@@ -395,6 +395,7 @@ app.get('/api/:userId/import/stats', requireUser, (req, res) => {
 const HAE_METRIC_MAP = {
   // Body
   body_mass: 'weight',
+  weight_body_mass: 'weight',
   body_fat_percentage: 'body_fat',
   lean_body_mass: 'lean_mass',
   body_mass_index: 'bmi',
@@ -436,6 +437,8 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   const me = req.body?.data?.me ?? req.body?.data?.profile ?? req.body?.data?.characteristics ?? null
   if (me || !req.user.birth_year) console.log('[import keys]', topKeys, '| me:', me)
   const metrics = req.body?.data?.metrics ?? []
+  const bodyMass = metrics.find(m => m.name === 'body_mass')
+  if (bodyMass) console.log('[import body_mass]', bodyMass.units, 'sample:', bodyMass.data?.[0])
   const stats = { imported: 0, skipped: 0 }
 
   const upsert = db.prepare(`
@@ -466,14 +469,22 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
     for (const { name, units, data = [] } of metrics) {
       const metricName = HAE_METRIC_MAP[name] || name
 
+      if (name === 'body_mass') {
+        console.log(`[import body_mass] ${data.length} points, units=${units}, sample keys:`, data[0] ? Object.keys(data[0]) : 'none')
+      }
+
       for (const point of data) {
         const date = point.date?.slice(0, 10)
         if (!date) { stats.skipped++; continue }
 
-        const raw = parseFloat(point.qty)
-        if (isNaN(raw)) { stats.skipped++; continue }
+        const raw = parseFloat(point.qty ?? point.Avg ?? point.Max ?? point.Min)
+        if (isNaN(raw)) {
+          if (name === 'body_mass') console.log('[import body_mass] skipped point (no qty/Avg):', point)
+          stats.skipped++; continue
+        }
 
         const value = convertUnit(name, raw, units)
+        if (name === 'body_mass') console.log(`[import body_mass] storing date=${date} value=${value}`)
         upsert.run({ date, metric: metricName, value, source: 'apple_health' })
         stats.imported++
       }
@@ -481,7 +492,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
 
     // Aggregate workouts → workout_count + exercise_minutes + HR zones per day
     if (workouts.length) {
-      const age   = req.user.birth_year ? new Date().getFullYear() - req.user.birth_year : null
+      const age = req.user.birth_year ? new Date().getFullYear() - req.user.birth_year : null
       const maxHR = age ? 220 - age : null
       const byDate = {}
       for (const w of workouts) {
@@ -494,7 +505,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         if (maxHR && w.heartRateData?.length) {
           for (const d of w.heartRateData) {
             const pct = (d.Avg ?? 0) / maxHR * 100
-            if      (pct >= 90) byDate[date].z[4]++
+            if (pct >= 90) byDate[date].z[4]++
             else if (pct >= 80) byDate[date].z[3]++
             else if (pct >= 70) byDate[date].z[2]++
             else if (pct >= 60) byDate[date].z[1]++
@@ -503,7 +514,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         }
       }
       for (const [date, { count, minutes, z }] of Object.entries(byDate)) {
-        upsert.run({ date, metric: 'workout_count',    value: count,               source: 'apple_health' })
+        upsert.run({ date, metric: 'workout_count', value: count, source: 'apple_health' })
         upsert.run({ date, metric: 'exercise_minutes', value: Math.round(minutes), source: 'apple_health' })
         stats.imported += 2
         z.forEach((mins, i) => {
@@ -518,6 +529,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
 
   try {
     importAll()
+    console.log(`[import] ${req.params.userId}: imported=${stats.imported} skipped=${stats.skipped}`)
     res.json({ ok: true, ...stats })
   } catch (e) {
     res.status(500).json({ error: e.message })

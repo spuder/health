@@ -721,12 +721,17 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
 
     const msg = await anthropic.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: LAB_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     })
 
-    const raw = msg.content[0].text.trim()
+    if (msg.stop_reason === 'max_tokens') {
+      throw new Error('Response too large — try a shorter file or split it into sections')
+    }
+
+    const raw = msg.content[0]?.text?.trim() ?? ''
+    if (!raw) throw new Error('Empty response from AI')
     const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     parsed = JSON.parse(jsonStr)
   } catch (err) {

@@ -29,6 +29,14 @@ const LAB_CATEGORIES = [
     ],
   },
   {
+    id: 'fertility',
+    label: 'Fertility',
+    color: '#f472b6',
+    keys: [
+      'oxidative_stress_adduct', 'dna_fragmentation_index', 'high_dna_stainability',
+    ],
+  },
+  {
     id: 'metabolic',
     label: 'Metabolic Efficiency',
     color: '#34d399',

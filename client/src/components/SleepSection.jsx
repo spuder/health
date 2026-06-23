@@ -29,9 +29,9 @@ function avg(arr) {
 
 function StatCard({ label, value, sublabel, color = '#60a5fa' }) {
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-2">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-5 flex flex-col gap-2">
       <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">{label}</span>
-      <span className="text-3xl font-bold" style={{ color: value ? color : '#2d3d58' }}>
+      <span className="text-3xl font-bold" style={{ color: value ? color : '#374d6c' }}>
         {value ? fmt(value) : '—'}
       </span>
       {sublabel && <span className="text-[#475569] text-xs">{sublabel}</span>}
@@ -44,7 +44,7 @@ function CustomTooltip({ active, payload }) {
   const d = payload[0]?.payload
   if (!d?.sleep_hours) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
@@ -78,7 +78,7 @@ export default function SleepSection({ data }) {
           <div className="w-1 h-6 rounded-full bg-[#60a5fa]" />
           <h2 className="text-white text-xl font-semibold">Sleep</h2>
         </div>
-        <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+        <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
       </div>
 
       {/* Stat cards */}
@@ -104,16 +104,16 @@ export default function SleepSection({ data }) {
       </div>
 
       {/* Bar chart */}
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6">
         {withHours.length === 0 ? (
-          <div className="flex items-center justify-center h-48 text-[#2d3d58] text-sm">
+          <div className="flex items-center justify-center h-48 text-[#374d6c] text-sm">
             No sleep data yet — log a night or sync Apple Health
           </div>
         ) : (
           <>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={withHours.slice(-60)} margin={{ top: 8, right: 8, left: -20, bottom: 0 }} barSize={withHours.length > 30 ? 6 : 10}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}

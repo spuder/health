@@ -802,6 +802,70 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
+// Protocols
+// ─────────────────────────────────────────────────────────────
+
+app.get('/api/:userId/protocols', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  db.pragma('foreign_keys = ON')
+  const protocols = db.prepare('SELECT * FROM protocols ORDER BY month ASC, sort_order ASC, id ASC').all()
+  const subs = db.prepare('SELECT * FROM sub_protocols ORDER BY sort_order ASC, id ASC').all()
+  const subsByProtocol = {}
+  for (const s of subs) {
+    if (!subsByProtocol[s.protocol_id]) subsByProtocol[s.protocol_id] = []
+    subsByProtocol[s.protocol_id].push(s)
+  }
+  res.json(protocols.map(p => ({ ...p, sub_protocols: subsByProtocol[p.id] ?? [] })))
+})
+
+app.post('/api/:userId/protocols', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const { month, name, color = '#7c3aed' } = req.body
+  if (!month || !name) return res.status(400).json({ error: 'month and name required' })
+  const { lastInsertRowid } = db.prepare('INSERT INTO protocols (month, name, color) VALUES (?, ?, ?)').run(month, name, color)
+  res.json({ ...db.prepare('SELECT * FROM protocols WHERE id = ?').get(lastInsertRowid), sub_protocols: [] })
+})
+
+app.patch('/api/:userId/protocols/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const p = db.prepare('SELECT * FROM protocols WHERE id = ?').get(req.params.id)
+  if (!p) return res.status(404).json({ error: 'not found' })
+  const { name = p.name, color = p.color } = req.body
+  db.prepare('UPDATE protocols SET name = ?, color = ? WHERE id = ?').run(name, color, req.params.id)
+  res.json(db.prepare('SELECT * FROM protocols WHERE id = ?').get(req.params.id))
+})
+
+app.delete('/api/:userId/protocols/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  db.pragma('foreign_keys = ON')
+  db.prepare('DELETE FROM protocols WHERE id = ?').run(req.params.id)
+  res.json({ ok: true })
+})
+
+app.post('/api/:userId/protocols/:id/sub', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const { name } = req.body
+  if (!name) return res.status(400).json({ error: 'name required' })
+  const { lastInsertRowid } = db.prepare('INSERT INTO sub_protocols (protocol_id, name) VALUES (?, ?)').run(req.params.id, name)
+  res.json(db.prepare('SELECT * FROM sub_protocols WHERE id = ?').get(lastInsertRowid))
+})
+
+app.patch('/api/:userId/sub-protocols/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const s = db.prepare('SELECT * FROM sub_protocols WHERE id = ?').get(req.params.id)
+  if (!s) return res.status(404).json({ error: 'not found' })
+  const { name = s.name } = req.body
+  db.prepare('UPDATE sub_protocols SET name = ? WHERE id = ?').run(name, req.params.id)
+  res.json(db.prepare('SELECT * FROM sub_protocols WHERE id = ?').get(req.params.id))
+})
+
+app.delete('/api/:userId/sub-protocols/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  db.prepare('DELETE FROM sub_protocols WHERE id = ?').run(req.params.id)
+  res.json({ ok: true })
+})
+
+// ─────────────────────────────────────────────────────────────
 // SPA fallback
 // ─────────────────────────────────────────────────────────────
 

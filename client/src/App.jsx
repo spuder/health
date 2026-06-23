@@ -9,9 +9,10 @@ import HeartRateSection from './components/HeartRateSection'
 import LabsSection from './components/LabsSection'
 import EventsSection from './components/EventsSection'
 import ImportSection from './components/ImportSection'
+import ProtocolsSection from './components/ProtocolsSection'
 import ExportModal from './components/ExportModal'
 
-const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'import']
+const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'protocols', 'import']
 
 // ── Onboarding (no users yet) ────────────────────────────────
 function OnboardingScreen() {
@@ -36,8 +37,8 @@ function OnboardingScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070b12] flex items-center justify-center">
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-8 w-full max-w-sm shadow-2xl">
+    <div className="min-h-screen bg-[#0d1520] flex items-center justify-center">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-8 w-full max-w-sm shadow-2xl">
         <div className="w-10 h-10 rounded-xl bg-[#7c3aed] flex items-center justify-center text-xl mb-6">✦</div>
         <h1 className="text-white text-xl font-bold mb-1">Welcome to Health</h1>
         <p className="text-[#475569] text-sm mb-6">Create your profile to get started.</p>
@@ -81,15 +82,16 @@ function Dashboard() {
   const [bloodData,     setBloodData]     = useState(null)
   const [labReports,    setLabReports]    = useState(null)
   const [eventsData,    setEventsData]    = useState(null)
+  const [protocolsData, setProtocolsData] = useState(null)
   const [loading, setLoading]       = useState(true)
   const [error,   setError]         = useState(null)
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async ({ showLoading = false } = {}) => {
     if (!currentUserId) return
-    setLoading(true)
+    if (showLoading) setLoading(true)
     setError(null)
     try {
-      const [body, sleep, exercise, heartrate, blood, events, reports] = await Promise.all([
+      const [body, sleep, exercise, heartrate, blood, events, reports, protocols] = await Promise.all([
         api.getBody(currentUserId),
         api.getSleep(currentUserId),
         api.getExercise(currentUserId),
@@ -97,6 +99,7 @@ function Dashboard() {
         api.getBlood(currentUserId),
         api.getEvents(currentUserId),
         api.getLabReports(currentUserId),
+        api.getProtocols(currentUserId),
       ])
       setBodyData(body)
       setSleepData(sleep)
@@ -105,10 +108,11 @@ function Dashboard() {
       setBloodData(blood)
       setEventsData(events)
       setLabReports(reports)
+      setProtocolsData(protocols)
     } catch (e) {
       setError('Could not connect to the API. Make sure the server is running on port 3001.')
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [currentUserId])
 
@@ -121,7 +125,8 @@ function Dashboard() {
     setBloodData(null)
     setEventsData(null)
     setLabReports(null)
-    loadAll()
+    setProtocolsData(null)
+    loadAll({ showLoading: true })
   }, [currentUserId, loadAll])
 
   const handleNav = (id) => {
@@ -147,7 +152,7 @@ function Dashboard() {
     const { default: html2canvas } = await import('html2canvas')
     const main = document.querySelector('main')
     const canvas = await html2canvas(main, {
-      backgroundColor: '#070b12',
+      backgroundColor: '#0d1520',
       scale: 2,
       useCORS: true,
       height: main.scrollHeight,
@@ -181,11 +186,11 @@ function Dashboard() {
   }, [loading])
 
   return (
-    <div className="min-h-screen bg-[#070b12]">
+    <div className="min-h-screen bg-[#0d1520]">
       <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Mobile top bar */}
-      <div className="no-print md:hidden fixed top-0 left-0 right-0 z-20 h-14 bg-[#0a0f1a] border-b border-[#1d2a3e] flex items-center px-4 gap-3">
+      <div className="no-print md:hidden fixed top-0 left-0 right-0 z-20 h-14 bg-[#111826] border-b border-[#243450] flex items-center px-4 gap-3">
         <button
           onClick={() => setSidebarOpen(o => !o)}
           className="w-8 h-8 flex flex-col justify-center gap-1.5 text-[#94a3b8] hover:text-white"
@@ -209,7 +214,7 @@ function Dashboard() {
           </div>
           <button
             onClick={() => setShowExport(true)}
-            className="no-print flex-shrink-0 flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] border border-[#1d2a3e] hover:border-[#2d3d58] text-xs font-medium px-3 py-2 rounded-xl transition-colors mt-1"
+            className="no-print flex-shrink-0 flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] border border-[#243450] hover:border-[#374d6c] text-xs font-medium px-3 py-2 rounded-xl transition-colors mt-1"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -227,9 +232,9 @@ function Dashboard() {
 
         {loading ? (
           <div className="flex flex-col gap-4 animate-pulse">
-            <div className="h-72 bg-[#0d1422] border border-[#1d2a3e] rounded-2xl" />
+            <div className="h-72 bg-[#131d2e] border border-[#243450] rounded-2xl" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[0,1,2].map(i => <div key={i} className="h-32 bg-[#0d1422] border border-[#1d2a3e] rounded-2xl" />)}
+              {[0,1,2].map(i => <div key={i} className="h-32 bg-[#131d2e] border border-[#243450] rounded-2xl" />)}
             </div>
           </div>
         ) : (
@@ -240,6 +245,7 @@ function Dashboard() {
             <div className={printSections && !printSections.heartrate ? 'print-exclude' : ''}><HeartRateSection data={heartrateData} /></div>
             <div className={printSections && !printSections.labs      ? 'print-exclude' : ''}><LabsSection      data={bloodData}     reports={labReports?.reports ?? []} /></div>
             <div className={printSections && !printSections.events    ? 'print-exclude' : ''}><EventsSection    data={eventsData}    userId={currentUserId} onRefresh={loadAll} /></div>
+            <div className="print-exclude"><ProtocolsSection data={protocolsData ?? []} userId={currentUserId} onRefresh={loadAll} /></div>
             <div className="print-exclude"><ImportSection userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} /></div>
           </>
         )}
@@ -255,7 +261,7 @@ function AppInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#070b12] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0d1520] flex items-center justify-center">
         <div className="w-8 h-8 rounded-lg bg-[#7c3aed] animate-pulse" />
       </div>
     )

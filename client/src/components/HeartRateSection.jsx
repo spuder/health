@@ -50,10 +50,10 @@ function formatTick(dateStr, days) {
 function StatCard({ label, value, unit = 'bpm', sublabel }) {
   const color = rhrColor(value)
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-2">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-5 flex flex-col gap-2">
       <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">{label}</span>
       <div className="flex items-end gap-1.5">
-        <span className="text-3xl font-bold" style={{ color: value != null ? color : '#2d3d58' }}>
+        <span className="text-3xl font-bold" style={{ color: value != null ? color : '#374d6c' }}>
           {value ?? '—'}
         </span>
         {value != null && <span className="text-[#475569] text-sm mb-0.5">{unit}</span>}
@@ -68,7 +68,7 @@ function RhrTooltip({ active, payload }) {
   const d = payload[0]?.payload
   if (!d) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
@@ -117,7 +117,7 @@ export default function HeartRateSection({ data }) {
           <div className="w-1 h-6 rounded-full" style={{ background: COLOR }} />
           <h2 className="text-white text-xl font-semibold">Resting Heart Rate</h2>
         </div>
-        <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+        <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
       </div>
 
       {/* Stat cards */}
@@ -140,13 +140,13 @@ export default function HeartRateSection({ data }) {
       </div>
 
       {/* Chart */}
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <p className="text-white text-sm font-medium">Resting Heart Rate</p>
             <p className="text-[#475569] text-xs mt-0.5">bpm over time</p>
           </div>
-          <div className="flex items-center gap-1 bg-[#070b12] border border-[#1d2a3e] rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-[#0d1520] border border-[#243450] rounded-lg p-1">
             {RANGES.map(r => (
               <button
                 key={r.label}
@@ -165,7 +165,7 @@ export default function HeartRateSection({ data }) {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-48 text-[#2d3d58] text-sm">
+          <div className="flex items-center justify-center h-48 text-[#374d6c] text-sm">
             No resting heart rate data — sync Apple Health to populate
           </div>
         ) : (
@@ -196,7 +196,7 @@ export default function HeartRateSection({ data }) {
                   </linearGradient>
                 </defs>
 
-                <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
 
                 <XAxis
                   dataKey="date"
@@ -229,7 +229,7 @@ export default function HeartRateSection({ data }) {
                   fill="url(#rhrGradient)"
                   isAnimationActive={false}
                   dot={showDots ? { r: 3, fill: COLOR, strokeWidth: 0 } : false}
-                  activeDot={{ r: 5, fill: COLOR, stroke: '#070b12', strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: COLOR, stroke: '#0d1520', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>

@@ -30,10 +30,10 @@ function since(days) {
 
 function StatCard({ label, value, unit, sublabel, color }) {
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-2">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-5 flex flex-col gap-2">
       <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">{label}</span>
       <div className="flex items-end gap-1.5">
-        <span className="text-3xl font-bold" style={{ color: value != null ? color : '#2d3d58' }}>
+        <span className="text-3xl font-bold" style={{ color: value != null ? color : '#374d6c' }}>
           {value ?? '—'}
         </span>
         {value != null && unit && <span className="text-[#475569] text-sm mb-0.5">{unit}</span>}
@@ -48,7 +48,7 @@ function ExTooltip({ active, payload }) {
   const d = payload[0]?.payload
   if (!d) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
       </p>
@@ -70,7 +70,7 @@ function HrTooltip({ active, payload }) {
   const d = payload[0]?.payload
   if (!d?.hr_hard_minutes) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
       </p>
@@ -131,7 +131,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
             <span className="text-base leading-none">+</span>
             Log Session
           </button>
-          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
         </div>
       </div>
 
@@ -153,14 +153,14 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
         />
 
         {/* HR Zone breakdown card */}
-        <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-2">
+        <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-5 flex flex-col gap-2">
           <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">Avg Zone Min / Day</span>
           {hasZoneData ? (
             <div className="flex flex-col gap-1.5 mt-1">
               {ZONES.map((z, i) => (
                 <div key={z.key} className="flex items-center gap-2">
                   <span className="text-[10px] font-mono w-5 shrink-0" style={{ color: z.color }}>{z.label}</span>
-                  <div className="flex-1 h-1.5 bg-[#1d2a3e] rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-[#243450] rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
                       style={{ width: `${((avgZoneMins[i] ?? 0) / maxZoneAvg) * 100}%`, background: z.color, opacity: 0.8 }}
@@ -171,10 +171,10 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
                   </span>
                 </div>
               ))}
-              <p className="text-[#2d3d58] text-[10px] mt-0.5">30-day avg · {zoneDays.length} workout days</p>
+              <p className="text-[#374d6c] text-[10px] mt-0.5">30-day avg · {zoneDays.length} workout days</p>
             </div>
           ) : (
-            <p className="text-[#2d3d58] text-xs mt-1">
+            <p className="text-[#374d6c] text-xs mt-1">
               Set your max HR in your profile, then sync workouts.
             </p>
           )}
@@ -182,16 +182,16 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
       </div>
 
       {/* Exercise minutes bar chart */}
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6 mb-4">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6 mb-4">
         <p className="text-white text-sm font-medium mb-4">Exercise Minutes / Day</p>
         {recent.filter(e => e.exercise_minutes != null).length === 0 ? (
-          <div className="flex items-center justify-center h-40 text-[#2d3d58] text-sm">
+          <div className="flex items-center justify-center h-40 text-[#374d6c] text-sm">
             No exercise data — log a session or sync Apple Health
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={recent} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barSize={recent.length > 30 ? 5 : 9}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -237,11 +237,11 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
 
       {/* HR zone stacked bar chart */}
       {hasZoneData && (
-        <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6">
+        <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6">
           <p className="text-white text-sm font-medium mb-4">Heart Rate Zones / Day</p>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={recent} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barSize={recent.length > 30 ? 5 : 9}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={(d) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -260,7 +260,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
                   const total = ZONES.reduce((s, z) => s + (d[z.key] ?? 0), 0)
                   if (!total) return null
                   return (
-                    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+                    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
                       <p className="text-[#64748b] text-xs mb-2">
                         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
                       </p>

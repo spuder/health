@@ -52,7 +52,7 @@ function BodyTrendTooltip({ active, payload, unit }) {
   const d = payload[0]?.payload
   if (!d) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-3 py-2 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-3 py-2 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-0.5">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
       </p>
@@ -76,7 +76,7 @@ function BodyTrendChart({ title, dataKey, unit, color, entries }) {
   const yMax = allVals.length ? Math.ceil(Math.max(...allVals) + padding) : 100
 
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-3">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">{title}</span>
       </div>
@@ -90,11 +90,11 @@ function BodyTrendChart({ title, dataKey, unit, color, entries }) {
         )}
       </div>
       {filtered.length < 2 ? (
-        <div className="flex items-center justify-center h-20 text-[#2d3d58] text-xs">No trend data yet</div>
+        <div className="flex items-center justify-center h-20 text-[#374d6c] text-xs">No trend data yet</div>
       ) : (
         <ResponsiveContainer width="100%" height={80}>
           <LineChart data={filtered} margin={{ top: 4, right: 4, left: -30, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
             <XAxis dataKey="date" hide />
             <YAxis domain={[yMin, yMax]} hide />
             <Tooltip content={<BodyTrendTooltip unit={unit} />} />
@@ -104,7 +104,7 @@ function BodyTrendChart({ title, dataKey, unit, color, entries }) {
               stroke={color}
               strokeWidth={2}
               dot={false}
-              activeDot={{ r: 4, fill: color, stroke: '#070b12', strokeWidth: 2 }}
+              activeDot={{ r: 4, fill: color, stroke: '#0d1520', strokeWidth: 2 }}
               isAnimationActive={false}
             />
           </LineChart>
@@ -119,7 +119,7 @@ function MetricCard({ label, value, unit, category, delta, deltaLabel, sublabel,
   const isDown = delta < 0
 
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-5 flex flex-col gap-3">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-[#475569] text-xs font-medium uppercase tracking-wider">{label}</span>
         {category && (
@@ -147,7 +147,7 @@ function MetricCard({ label, value, unit, category, delta, deltaLabel, sublabel,
           <div className="flex justify-between text-[10px] text-[#475569] mb-1">
             <span>1</span><span>9</span><span>14</span><span>20</span>
           </div>
-          <div className="h-1.5 rounded-full bg-[#1d2a3e] relative overflow-hidden">
+          <div className="h-1.5 rounded-full bg-[#243450] relative overflow-hidden">
             <div
               className="absolute left-0 top-0 h-full rounded-full transition-all"
               style={{
@@ -196,12 +196,12 @@ export default function BodySection({ data, events, userId, onRefresh }) {
           </button>
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-2 bg-[#0d1422] hover:bg-[#1d2a3e] border border-[#2d3d58] text-[#94a3b8] text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 bg-[#131d2e] hover:bg-[#243450] border border-[#374d6c] text-[#94a3b8] text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             <span className="text-base leading-none">🍎</span>
             Sync
           </button>
-          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
         </div>
       </div>
 

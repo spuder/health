@@ -11,7 +11,7 @@ function CustomTooltip({ active, payload, label, unit, markerKey }) {
   const d = payload[0]?.payload
   if (!d) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
@@ -46,7 +46,7 @@ function BloodChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLo
   const yMax = Math.ceil(dataMax + padding)
 
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6 flex flex-col gap-4">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6 flex flex-col gap-4">
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-white font-semibold text-base">{title}</h3>
@@ -73,7 +73,7 @@ function BloodChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLo
       </div>
 
       {filtered.length < 2 ? (
-        <div className="flex items-center justify-center h-40 text-[#2d3d58] text-sm">
+        <div className="flex items-center justify-center h-40 text-[#374d6c] text-sm">
           Add at least 2 panels to see trend
         </div>
       ) : (
@@ -86,7 +86,7 @@ function BloodChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLo
               </linearGradient>
             </defs>
 
-            <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
 
             <XAxis
               dataKey="date"
@@ -121,7 +121,7 @@ function BloodChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLo
               stroke={color}
               strokeWidth={2.5}
               dot={{ fill: color, strokeWidth: 0, r: 5 }}
-              activeDot={{ r: 6, fill: color, stroke: '#070b12', strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: color, stroke: '#0d1520', strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>

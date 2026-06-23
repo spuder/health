@@ -24,8 +24,8 @@ function EventCard({ event, onDelete }) {
   const cfg = EVENT_TYPES[event.type] ?? {
     label: event.type,
     icon: '📌',
-    color: 'border-[#2d3d58]',
-    badge: 'text-[#94a3b8] bg-[#141d2e] border-[#2d3d58]',
+    color: 'border-[#374d6c]',
+    badge: 'text-[#94a3b8] bg-[#1a2540] border-[#374d6c]',
     dot: 'bg-[#475569]',
   }
 
@@ -37,8 +37,8 @@ function EventCard({ event, onDelete }) {
     <div className="flex gap-4 group">
       {/* Timeline dot + line */}
       <div className="flex flex-col items-center pt-1">
-        <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-[#070b12] ${cfg.dot}`} />
-        <div className="w-px flex-1 bg-[#1d2a3e] mt-2" />
+        <div className={`w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-[#0d1520] ${cfg.dot}`} />
+        <div className="w-px flex-1 bg-[#243450] mt-2" />
       </div>
 
       {/* Card */}
@@ -57,7 +57,7 @@ function EventCard({ event, onDelete }) {
             </span>
             <button
               onClick={() => onDelete()}
-              className="text-[#2d3d58] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-sm"
+              className="text-[#374d6c] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-sm"
               title="Delete event"
             >
               ✕
@@ -66,7 +66,7 @@ function EventCard({ event, onDelete }) {
         </div>
 
         {event.notes && (
-          <p className="text-[#64748b] text-xs mt-3 leading-relaxed border-t border-[#1d2a3e] pt-3">
+          <p className="text-[#64748b] text-xs mt-3 leading-relaxed border-t border-[#243450] pt-3">
             {event.notes}
           </p>
         )}
@@ -101,13 +101,13 @@ export default function EventsSection({ data, userId, onRefresh }) {
             <span className="text-base leading-none">+</span>
             Add Event
           </button>
-          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
         </div>
       </div>
 
       {entries.length === 0 ? (
-        <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-12 text-center">
-          <p className="text-[#2d3d58] text-4xl mb-3">📅</p>
+        <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-12 text-center">
+          <p className="text-[#374d6c] text-4xl mb-3">📅</p>
           <p className="text-[#475569] text-sm">No events yet. Add your first doctor visit or blood draw.</p>
         </div>
       ) : (
@@ -118,7 +118,7 @@ export default function EventsSection({ data, userId, onRefresh }) {
           {/* Terminal dot */}
           <div className="flex gap-4">
             <div className="flex flex-col items-center w-3">
-              <div className="w-2 h-2 rounded-full bg-[#1d2a3e] mx-auto" />
+              <div className="w-2 h-2 rounded-full bg-[#243450] mx-auto" />
             </div>
           </div>
         </div>

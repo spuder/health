@@ -57,9 +57,27 @@ const SCHEMA = `
     created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS protocols (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    month      TEXT    NOT NULL,
+    name       TEXT    NOT NULL,
+    color      TEXT    NOT NULL DEFAULT '#7c3aed',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS sub_protocols (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocol_id INTEGER NOT NULL REFERENCES protocols(id) ON DELETE CASCADE,
+    name        TEXT    NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_metrics_date    ON metrics(date);
   CREATE INDEX IF NOT EXISTS idx_metrics_metric  ON metrics(metric);
   CREATE INDEX IF NOT EXISTS idx_events_date     ON events(date);
+  CREATE INDEX IF NOT EXISTS idx_protocols_month ON protocols(month);
 `
 
 export function getDb(userId) {

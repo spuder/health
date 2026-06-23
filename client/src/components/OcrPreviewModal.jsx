@@ -55,10 +55,10 @@ export default function OcrPreviewModal({ parsed, onConfirm, onCancel, saving })
       style={{ background: 'rgba(7,11,18,0.85)', backdropFilter: 'blur(6px)' }}
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}
     >
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[85vh]">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[85vh]">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1d2a3e] shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#243450] shrink-0">
           <div>
             <h2 className="text-white font-semibold text-sm">Review OCR Results</h2>
             <p className="text-[#475569] text-xs mt-0.5">
@@ -70,13 +70,13 @@ export default function OcrPreviewModal({ parsed, onConfirm, onCancel, saving })
         </div>
 
         {/* Select all */}
-        <div className="px-5 py-2.5 border-b border-[#1d2a3e] shrink-0">
+        <div className="px-5 py-2.5 border-b border-[#243450] shrink-0">
           <button
             onClick={toggleAll}
             className="flex items-center gap-2 text-xs text-[#475569] hover:text-[#94a3b8] transition-colors"
           >
             <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-              allChecked ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#2d3d58] bg-transparent'
+              allChecked ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#374d6c] bg-transparent'
             }`}>
               {allChecked && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
             </span>
@@ -96,14 +96,14 @@ export default function OcrPreviewModal({ parsed, onConfirm, onCancel, saving })
                 className="flex items-center gap-3 w-full py-2.5 px-2 rounded-xl hover:bg-[#111827] transition-colors text-left"
               >
                 <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                  on ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#2d3d58] bg-transparent'
+                  on ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#374d6c] bg-transparent'
                 }`}>
                   {on && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                 </span>
-                <span className={`flex-1 text-sm transition-colors ${on ? 'text-[#cbd5e1]' : 'text-[#2d3d58]'}`}>
+                <span className={`flex-1 text-sm transition-colors ${on ? 'text-[#cbd5e1]' : 'text-[#374d6c]'}`}>
                   {toLabel(key)}
                 </span>
-                <span className={`text-sm font-mono transition-colors ${on ? 'text-white' : 'text-[#2d3d58]'}`}>
+                <span className={`text-sm font-mono transition-colors ${on ? 'text-white' : 'text-[#374d6c]'}`}>
                   {metrics[key]}{unit && <span className="text-[#475569] text-xs ml-1">{unit}</span>}
                 </span>
               </button>
@@ -112,10 +112,10 @@ export default function OcrPreviewModal({ parsed, onConfirm, onCancel, saving })
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-[#1d2a3e] flex gap-2 shrink-0">
+        <div className="px-5 py-4 border-t border-[#243450] flex gap-2 shrink-0">
           <button
             onClick={onCancel}
-            className="flex-1 py-2 rounded-xl text-sm font-medium text-[#475569] hover:text-[#94a3b8] border border-[#1d2a3e] hover:border-[#2d3d58] transition-colors"
+            className="flex-1 py-2 rounded-xl text-sm font-medium text-[#475569] hover:text-[#94a3b8] border border-[#243450] hover:border-[#374d6c] transition-colors"
           >
             Cancel
           </button>

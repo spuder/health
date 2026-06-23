@@ -129,41 +129,41 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           className={`cursor-pointer rounded-2xl border-2 border-dashed transition-colors flex flex-col items-center justify-center py-20 gap-4 select-none
             ${dragging
               ? 'border-violet-500 bg-violet-500/5'
-              : 'border-[#1d2a3e] bg-[#0d1422] hover:border-[#2d3d58] hover:bg-[#111827]'
+              : 'border-[#243450] bg-[#131d2e] hover:border-[#374d6c] hover:bg-[#111827]'
             }`}
         >
           <input ref={fileInputRef} type="file" accept=".pdf,.PDF,.csv,.CSV,.png,.PNG" className="hidden" onChange={handleFileInput} />
-          <div className="w-12 h-12 rounded-xl bg-[#1d2a3e] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-[#243450] flex items-center justify-center">
             <svg className="w-6 h-6 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
           <div className="text-center">
             <p className="text-[#94a3b8] text-sm font-medium">Drop a PDF or CSV here or click to browse</p>
-            <p className="text-[#2d3d58] text-xs mt-1">InBody scans · Blood panels · Lab reports · Screenshots</p>
+            <p className="text-[#374d6c] text-xs mt-1">InBody scans · Blood panels · Lab reports · Screenshots</p>
           </div>
         </div>
       )}
 
       {/* Uploading / processing */}
       {phase === 'uploading' && (
-        <div className="rounded-2xl border border-[#1d2a3e] bg-[#0d1422] flex flex-col items-center justify-center py-20 gap-4">
+        <div className="rounded-2xl border border-[#243450] bg-[#131d2e] flex flex-col items-center justify-center py-20 gap-4">
           <svg className="w-8 h-8 text-violet-400 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
           <div className="text-center">
             <p className="text-[#94a3b8] text-sm font-medium">Reading with AI…</p>
-            {fileName && <p className="text-[#2d3d58] text-xs mt-1">{fileName}</p>}
+            {fileName && <p className="text-[#374d6c] text-xs mt-1">{fileName}</p>}
           </div>
         </div>
       )}
 
       {/* Preview — metric toggles */}
       {phase === 'preview' && parsed && (
-        <div className="rounded-2xl border border-[#1d2a3e] bg-[#0d1422] overflow-hidden">
+        <div className="rounded-2xl border border-[#243450] bg-[#131d2e] overflow-hidden">
           {/* Preview header */}
-          <div className="px-6 py-4 border-b border-[#1d2a3e] flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-[#243450] flex items-center justify-between">
             <div>
               <p className="text-white text-sm font-semibold">Review detected metrics</p>
               <p className="text-[#475569] text-xs mt-0.5">
@@ -179,7 +179,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           </div>
 
           {/* Select all row */}
-          <div className="px-6 py-3 border-b border-[#1d2a3e]">
+          <div className="px-6 py-3 border-b border-[#243450]">
             <button onClick={toggleAll} className="flex items-center gap-2.5 text-xs text-[#475569] hover:text-[#94a3b8] transition-colors">
               <Checkbox checked={allChecked} />
               {allChecked ? 'Deselect all' : 'Select all'}
@@ -187,7 +187,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           </div>
 
           {/* Metric rows */}
-          <div className="divide-y divide-[#0d1422]">
+          <div className="divide-y divide-[#131d2e]">
             {metricKeys.map(key => {
               const on = checked[key]
               const unit = UNITS[key] ?? ''
@@ -198,12 +198,12 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
                   className="w-full flex items-center gap-4 px-6 py-3.5 hover:bg-[#111827] transition-colors text-left"
                 >
                   <Checkbox checked={on} />
-                  <span className={`flex-1 text-sm transition-colors ${on ? 'text-[#cbd5e1]' : 'text-[#2d3d58]'}`}>
+                  <span className={`flex-1 text-sm transition-colors ${on ? 'text-[#cbd5e1]' : 'text-[#374d6c]'}`}>
                     {toLabel(key)}
                   </span>
-                  <span className={`text-sm font-mono tabular-nums transition-colors ${on ? 'text-white' : 'text-[#2d3d58]'}`}>
+                  <span className={`text-sm font-mono tabular-nums transition-colors ${on ? 'text-white' : 'text-[#374d6c]'}`}>
                     {parsed.metrics[key]}
-                    {unit && <span className={`text-xs ml-1 ${on ? 'text-[#475569]' : 'text-[#1d2a3e]'}`}>{unit}</span>}
+                    {unit && <span className={`text-xs ml-1 ${on ? 'text-[#475569]' : 'text-[#243450]'}`}>{unit}</span>}
                   </span>
                 </button>
               )
@@ -211,7 +211,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           </div>
 
           {/* Footer actions */}
-          <div className="px-6 py-4 border-t border-[#1d2a3e] flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-[#243450] flex items-center justify-between gap-3">
             <button
               onClick={resetToIdle}
               className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors"
@@ -276,7 +276,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           {reportsOpen && (
             <div className="flex flex-col gap-2">
               {reports.map(r => (
-                <div key={r.id} className="flex items-center justify-between bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3">
+                <div key={r.id} className="flex items-center justify-between bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3">
                   <div className="flex items-center gap-3">
                     <svg className="w-4 h-4 text-[#475569] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -287,13 +287,13 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
                       </span>
                       <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
                     </div>
-                    <span className="text-[#2d3d58] text-xs">{r.markers.length} markers</span>
+                    <span className="text-[#374d6c] text-xs">{r.markers.length} markers</span>
                   </div>
                   <a
                     href={api.labReportPdfUrl(userId, r.id)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#1d2a3e] hover:border-[#2d3d58] transition-colors"
+                    className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#243450] hover:border-[#374d6c] transition-colors"
                   >
                     View PDF
                   </a>
@@ -309,7 +309,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
 
 function Checkbox({ checked }) {
   return (
-    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#2d3d58] bg-transparent'
+    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#374d6c] bg-transparent'
       }`}>
       {checked && (
         <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

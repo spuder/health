@@ -96,7 +96,7 @@ function CustomTooltip({ active, payload, unit, markerKey, reports }) {
   if (!d) return null
   const src = d.source ? sourceLabel(d.source, d.date, reports) : null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
@@ -143,12 +143,12 @@ function MarkerInfoPopup({ markerKey }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-5 h-5 rounded-full border border-[#2d3d58] text-[#475569] hover:text-[#94a3b8] hover:border-[#475569] text-[10px] font-bold flex items-center justify-center transition-colors"
+        className="w-5 h-5 rounded-full border border-[#374d6c] text-[#475569] hover:text-[#94a3b8] hover:border-[#475569] text-[10px] font-bold flex items-center justify-center transition-colors"
       >
         ?
       </button>
       {open && (
-        <div className="absolute right-0 top-7 z-20 w-64 bg-[#0a0f1a] border border-[#1d2a3e] rounded-xl p-4 shadow-2xl">
+        <div className="absolute right-0 top-7 z-20 w-64 bg-[#111826] border border-[#243450] rounded-xl p-4 shadow-2xl">
           <p className="text-white text-xs font-medium mb-2">{info.summary}</p>
           <p className="text-[#64748b] text-xs leading-relaxed">{info.details}</p>
         </div>
@@ -194,7 +194,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
   const yMax = Math.ceil(dataMax + padding)
 
   return (
-    <div className={`bg-[#0d1422] border rounded-2xl p-6 flex flex-col gap-4 ${isOut ? 'border-red-900' : 'border-[#1d2a3e]'
+    <div className={`bg-[#131d2e] border rounded-2xl p-6 flex flex-col gap-4 ${isOut ? 'border-red-900' : 'border-[#243450]'
       }`}>
       <div className="flex items-start justify-between">
         <div>
@@ -237,7 +237,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
 
           <XAxis
             dataKey="date"
@@ -276,7 +276,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
             stroke={chartColor}
             strokeWidth={2.5}
             dot={{ fill: chartColor, strokeWidth: 0, r: compact ? 3 : 5 }}
-            activeDot={{ r: compact ? 4 : 6, fill: chartColor, stroke: '#070b12', strokeWidth: 2 }}
+            activeDot={{ r: compact ? 4 : 6, fill: chartColor, stroke: '#0d1520', strokeWidth: 2 }}
             isAnimationActive={false}
           />
         </LineChart>
@@ -369,7 +369,7 @@ export default function LabsSection({ data, reports = [] }) {
           <h2 className="text-white text-xl font-semibold">Labs</h2>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#1d2a3e] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
+          <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
         </div>
       </div>
 
@@ -386,7 +386,7 @@ export default function LabsSection({ data, reports = [] }) {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search markers…"
-              className="w-full bg-[#111827] border border-[#1d2a3e] hover:border-[#2d3d58] focus:border-[#4f6080] text-[#cbd5e1] placeholder-[#475569] text-sm rounded-xl pl-10 pr-10 py-2.5 outline-none transition-colors"
+              className="w-full bg-[#111827] border border-[#243450] hover:border-[#374d6c] focus:border-[#4f6080] text-[#cbd5e1] placeholder-[#475569] text-sm rounded-xl pl-10 pr-10 py-2.5 outline-none transition-colors"
             />
             {searchQuery && (
               <button
@@ -408,7 +408,7 @@ export default function LabsSection({ data, reports = [] }) {
                   onClick={() => toggleFilter(f.id)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${active
                       ? f.activeClass
-                      : 'border-[#1d2a3e] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#2d3d58]'
+                      : 'border-[#243450] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#374d6c]'
                     }`}
                 >
                   {f.label}
@@ -420,11 +420,11 @@ export default function LabsSection({ data, reports = [] }) {
       )}
 
       {allMarkerKeys.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-[#2d3d58] text-sm">
+        <div className="flex items-center justify-center py-16 text-[#374d6c] text-sm">
           No lab data yet — upload a PDF to get started
         </div>
       ) : sections.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-[#2d3d58] text-sm">
+        <div className="flex items-center justify-center py-16 text-[#374d6c] text-sm">
           {searchQuery ? `No markers match "${searchQuery}"` : 'No markers match the selected filters'}
         </div>
       ) : (

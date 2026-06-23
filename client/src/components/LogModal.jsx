@@ -48,7 +48,7 @@ function BodyForm({ heightInches, onSubmit, onClose, loading }) {
       </div>
 
       {bmi && (
-        <div className="bg-[#070b12] border border-[#1d2a3e] rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="bg-[#0d1520] border border-[#243450] rounded-lg px-3 py-2 flex items-center gap-2">
           <span className="text-[#475569] text-xs">Calculated BMI:</span>
           <span className="text-white text-sm font-semibold">{bmi}</span>
         </div>
@@ -68,7 +68,7 @@ function BodyForm({ heightInches, onSubmit, onClose, loading }) {
       </Field>
 
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onClose} className="flex-1 bg-[#141d2e] border border-[#1d2a3e] hover:border-[#2d3d58] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 bg-[#1a2540] border border-[#243450] hover:border-[#374d6c] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
           Cancel
         </button>
         <button type="submit" disabled={loading || !weight} className="flex-1 bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
@@ -110,7 +110,7 @@ function BloodForm({ onSubmit, onClose, loading }) {
       </Field>
 
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onClose} className="flex-1 bg-[#141d2e] border border-[#1d2a3e] hover:border-[#2d3d58] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 bg-[#1a2540] border border-[#243450] hover:border-[#374d6c] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
           Cancel
         </button>
         <button type="submit" disabled={loading} className="flex-1 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
@@ -158,7 +158,7 @@ function ExerciseForm({ onSubmit, onClose, loading }) {
       </Field>
 
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onClose} className="flex-1 bg-[#141d2e] border border-[#1d2a3e] hover:border-[#2d3d58] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 bg-[#1a2540] border border-[#243450] hover:border-[#374d6c] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
           Cancel
         </button>
         <button type="submit" disabled={loading || !minutes} className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
@@ -206,7 +206,7 @@ function SleepForm({ onSubmit, onClose, loading }) {
       </Field>
 
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onClose} className="flex-1 bg-[#141d2e] border border-[#1d2a3e] hover:border-[#2d3d58] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 bg-[#1a2540] border border-[#243450] hover:border-[#374d6c] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
           Cancel
         </button>
         <button type="submit" disabled={loading || !hours} className="flex-1 bg-[#3b82f6] hover:bg-[#2563eb] disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
@@ -252,7 +252,7 @@ function EventForm({ onSubmit, onClose, loading }) {
       </Field>
 
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={onClose} className="flex-1 bg-[#141d2e] border border-[#1d2a3e] hover:border-[#2d3d58] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
+        <button type="button" onClick={onClose} className="flex-1 bg-[#1a2540] border border-[#243450] hover:border-[#374d6c] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
           Cancel
         </button>
         <button type="submit" disabled={loading || !label} className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
@@ -298,9 +298,9 @@ export default function LogModal({ type, heightInches, onClose, onSave }) {
       style={{ background: 'rgba(7, 11, 18, 0.85)', backdropFilter: 'blur(6px)' }}
       onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
     >
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl shadow-2xl w-full max-w-md">
         {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1d2a3e]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#243450]">
           <h2 className="text-white font-semibold text-base">{TITLES[type]}</h2>
           <button onClick={onClose} className="text-[#475569] hover:text-[#94a3b8] text-xl transition-colors leading-none">
             ✕

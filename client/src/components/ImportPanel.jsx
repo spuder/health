@@ -4,7 +4,7 @@ import { api } from '../api'
 function Step({ n, title, children }) {
   return (
     <div className="flex gap-3">
-      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-[#1d2a3e] text-[#64748b] text-[10px] font-bold flex items-center justify-center mt-0.5">
+      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-[#243450] text-[#64748b] text-[10px] font-bold flex items-center justify-center mt-0.5">
         {n}
       </div>
       <div className="flex-1 min-w-0">
@@ -38,7 +38,7 @@ function CopyField({ value }) {
 
   return (
     <div className="flex items-center gap-2 mt-1.5">
-      <div className="flex-1 bg-[#070b12] border border-[#1d2a3e] rounded-lg px-3 py-2 min-w-0">
+      <div className="flex-1 bg-[#0d1520] border border-[#243450] rounded-lg px-3 py-2 min-w-0">
         <p className="text-[#475569] text-[10px] font-mono break-all leading-relaxed">{value}</p>
       </div>
       <button
@@ -46,7 +46,7 @@ function CopyField({ value }) {
         className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
           copied
             ? 'bg-emerald-900 text-emerald-400 border border-emerald-700'
-            : 'bg-[#1d2a3e] hover:bg-[#2d3d58] text-[#94a3b8] border border-[#2d3d58]'
+            : 'bg-[#243450] hover:bg-[#374d6c] text-[#94a3b8] border border-[#374d6c]'
         }`}
       >
         {copied ? '✓ Copied' : 'Copy'}
@@ -57,7 +57,7 @@ function CopyField({ value }) {
 
 function Setting({ label, value, highlight }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-[#1d2a3e] last:border-0">
+    <div className="flex items-center justify-between py-1.5 border-b border-[#243450] last:border-0">
       <span className="text-[#475569] text-xs">{label}</span>
       <span className={`text-xs font-medium font-mono ${highlight ? 'text-[#a78bfa]' : 'text-[#94a3b8]'}`}>
         {value}
@@ -86,10 +86,10 @@ export default function ImportPanel({ userId, onClose }) {
       style={{ background: 'rgba(7,11,18,0.85)', backdropFilter: 'blur(6px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl shadow-2xl w-full max-w-md">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1d2a3e]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#243450]">
           <div className="flex items-center gap-2.5">
             <span className="text-lg">🍎</span>
             <div>
@@ -107,9 +107,9 @@ export default function ImportPanel({ userId, onClose }) {
           <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
             syncCount > 0
               ? 'bg-emerald-950 border-emerald-800'
-              : 'bg-[#0a0f1a] border-[#1d2a3e]'
+              : 'bg-[#111826] border-[#243450]'
           }`}>
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${syncCount > 0 ? 'bg-emerald-400' : 'bg-[#2d3d58]'}`} />
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${syncCount > 0 ? 'bg-emerald-400' : 'bg-[#374d6c]'}`} />
             <div>
               {syncCount > 0 ? (
                 <>
@@ -119,7 +119,7 @@ export default function ImportPanel({ userId, onClose }) {
               ) : (
                 <>
                   <p className="text-[#475569] text-xs font-semibold">Not yet connected</p>
-                  <p className="text-[#2d3d58] text-xs">Follow the steps below</p>
+                  <p className="text-[#374d6c] text-xs">Follow the steps below</p>
                 </>
               )}
             </div>
@@ -137,7 +137,7 @@ export default function ImportPanel({ userId, onClose }) {
               Open the app → <span className="text-[#64748b]">Automations</span> → <span className="text-[#64748b]">+ New</span> → <span className="text-[#64748b]">REST API</span>. Create <span className="text-[#94a3b8] font-medium">two automations</span> with the same URL — one for metrics, one for workouts.
             </p>
             <p className="text-[#475569] text-[11px] font-semibold mb-1 mt-2">Automation 1 — Health Metrics</p>
-            <div className="bg-[#070b12] border border-[#1d2a3e] rounded-xl px-4 py-1 mb-3">
+            <div className="bg-[#0d1520] border border-[#243450] rounded-xl px-4 py-1 mb-3">
               <Setting label="URL"            value="← paste above"      highlight />
               <Setting label="Method"         value="POST" />
               <Setting label="Data Type"      value="Health Metrics" />
@@ -147,7 +147,7 @@ export default function ImportPanel({ userId, onClose }) {
               <Setting label="Batch Requests" value="Enabled" />
             </div>
             <p className="text-[#475569] text-[11px] font-semibold mb-1">Automation 2 — Workouts <span className="text-[#f97316] font-normal">(needed for exercise data)</span></p>
-            <div className="bg-[#070b12] border border-[#1d2a3e] rounded-xl px-4 py-1">
+            <div className="bg-[#0d1520] border border-[#243450] rounded-xl px-4 py-1">
               <Setting label="URL"            value="← same URL"         highlight />
               <Setting label="Method"         value="POST" />
               <Setting label="Data Type"      value="Workouts" />
@@ -162,8 +162,8 @@ export default function ImportPanel({ userId, onClose }) {
               In the app, tap <span className="text-[#64748b]">Manual Export</span>, pick a date range, and send.
               Future syncs run automatically on your chosen interval.
             </p>
-            <div className="bg-[#070b12] border border-[#1d2a3e] rounded-xl px-4 py-3">
-              <p className="text-[#2d3d58] text-xs">
+            <div className="bg-[#0d1520] border border-[#243450] rounded-xl px-4 py-3">
+              <p className="text-[#374d6c] text-xs">
                 The sync is <span className="text-[#475569]">inbound</span> — the HAE app pushes data here.
                 Once sent, your weight history will appear in the chart above.
               </p>

@@ -37,7 +37,7 @@ function CustomTooltip({ active, payload }) {
   const entries = payload.filter(p => p.value != null)
   if (!entries.length) return null
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-2">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
@@ -109,14 +109,14 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
   const showDots = chartData.length <= 60
 
   return (
-    <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6">
+    <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-white font-semibold text-base">Weight</h3>
           <p className="text-[#475569] text-xs mt-0.5">lbs over time</p>
         </div>
-        <div className="flex items-center gap-1 bg-[#070b12] border border-[#1d2a3e] rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-[#0d1520] border border-[#243450] rounded-lg p-1">
           {RANGES.map(r => (
             <button
               key={r.label}
@@ -154,7 +154,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
             </linearGradient>
           </defs>
 
-          <CartesianGrid strokeDasharray="3 3" stroke="#1d2a3e" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#243450" vertical={false} />
 
           <XAxis
             dataKey="date"
@@ -196,7 +196,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
               fill="url(#weightGradientAH)"
               connectNulls={false}
               dot={showDots ? { r: 3, fill: '#a78bfa', strokeWidth: 0 } : false}
-              activeDot={{ r: 5, fill: '#a78bfa', stroke: '#070b12', strokeWidth: 2 }}
+              activeDot={{ r: 5, fill: '#a78bfa', stroke: '#0d1520', strokeWidth: 2 }}
             />
           )}
 
@@ -211,8 +211,8 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
                 stroke={color}
                 strokeWidth={2}
                 connectNulls={false}
-                dot={{ r: 5, fill: color, stroke: '#070b12', strokeWidth: 2 }}
-                activeDot={{ r: 7, fill: color, stroke: '#070b12', strokeWidth: 2 }}
+                dot={{ r: 5, fill: color, stroke: '#0d1520', strokeWidth: 2 }}
+                activeDot={{ r: 7, fill: color, stroke: '#0d1520', strokeWidth: 2 }}
               />
             )
           })}
@@ -221,7 +221,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
 
       {/* Legend */}
       {(activeSources.length > 0 || eventDates.length > 0) && (
-        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[#1d2a3e] flex-wrap">
+        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[#243450] flex-wrap">
           {activeSources.map(source => {
             const meta = SOURCE_META[source] ?? { label: source, color: '#94a3b8' }
             return (

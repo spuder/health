@@ -51,6 +51,15 @@ export const api = {
   confirmLabsImport: (userId, data) =>
     req(`/${userId}/import/labs-confirm`, { method: 'POST', body: JSON.stringify(data) }),
 
+  // ── Protocols ─────────────────────────────────────────────
+  getProtocols:      (userId)           => req(`/${userId}/protocols`),
+  addProtocol:       (userId, data)     => req(`/${userId}/protocols`, { method: 'POST', body: JSON.stringify(data) }),
+  updateProtocol:    (userId, id, data) => req(`/${userId}/protocols/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteProtocol:    (userId, id)       => req(`/${userId}/protocols/${id}`, { method: 'DELETE' }),
+  addSubProtocol:    (userId, pid, data)=> req(`/${userId}/protocols/${pid}/sub`, { method: 'POST', body: JSON.stringify(data) }),
+  updateSubProtocol: (userId, id, data) => req(`/${userId}/sub-protocols/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteSubProtocol: (userId, id)       => req(`/${userId}/sub-protocols/${id}`, { method: 'DELETE' }),
+
   importLabsPdf: async (userId, file) => {
     const form = new FormData()
     form.append('pdf', file)

@@ -25,7 +25,7 @@ function toLabel(key) {
     .replace(/\bEgfr\b/, 'eGFR').replace(/\bHba1c\b/, 'HbA1c')
 }
 
-export default function ImportSection({ userId, onRefresh }) {
+export default function ImportSection({ userId, onRefresh, reports = [] }) {
   const [phase, setPhase] = useState('idle') // idle | uploading | preview | done
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState(null)
@@ -34,6 +34,7 @@ export default function ImportSection({ userId, onRefresh }) {
   const [error, setError] = useState(null)
   const [importCount, setImportCount] = useState(0)
   const [fileHash, setFileHash] = useState(null)
+  const [reportsOpen, setReportsOpen] = useState(false)
   const fileInputRef = useRef(null)
 
   function resetToIdle() {
@@ -256,15 +257,60 @@ export default function ImportSection({ userId, onRefresh }) {
           <button onClick={() => setError(null)} className="opacity-50 hover:opacity-100">✕</button>
         </div>
       )}
+
+      {/* Past reports */}
+      {reports.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setReportsOpen(v => !v)}
+            className="flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] text-xs font-medium mb-2 transition-colors"
+          >
+            <svg
+              className={`w-3 h-3 transition-transform ${reportsOpen ? 'rotate-90' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            {reports.length} report{reports.length !== 1 ? 's' : ''}
+          </button>
+          {reportsOpen && (
+            <div className="flex flex-col gap-2">
+              {reports.map(r => (
+                <div key={r.id} className="flex items-center justify-between bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <svg className="w-4 h-4 text-[#475569] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <div>
+                      <span className="text-white text-sm font-medium">
+                        {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
+                    </div>
+                    <span className="text-[#2d3d58] text-xs">{r.markers.length} markers</span>
+                  </div>
+                  <a
+                    href={api.labReportPdfUrl(userId, r.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#1d2a3e] hover:border-[#2d3d58] transition-colors"
+                  >
+                    View PDF
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }
 
 function Checkbox({ checked }) {
   return (
-    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-      checked ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#2d3d58] bg-transparent'
-    }`}>
+    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-[#7c3aed] border-[#7c3aed]' : 'border-[#2d3d58] bg-transparent'
+      }`}>
       {checked && (
         <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />

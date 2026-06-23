@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { api } from '../api'
 import RawDataModal from './RawDataModal'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -62,18 +61,18 @@ function getMarkerStatus(key, entries, markers) {
   const { optimal_low, optimal_high, range_low, range_high } = cfg
   // A one-sided bound (e.g. "higher is better") counts as having a range
   const hasOptimal = optimal_low != null || optimal_high != null
-  const hasNormal  = range_low  != null || range_high  != null
+  const hasNormal = range_low != null || range_high != null
   if (!hasOptimal && !hasNormal) return null
 
   const inOptimal = hasOptimal &&
-    (optimal_low  == null || val >= optimal_low) &&
+    (optimal_low == null || val >= optimal_low) &&
     (optimal_high == null || val <= optimal_high)
   const inNormal = hasNormal &&
-    (range_low  == null || val >= range_low) &&
+    (range_low == null || val >= range_low) &&
     (range_high == null || val <= range_high)
 
   if (inOptimal) return 'optimal'
-  if (inNormal)  return 'normal'
+  if (inNormal) return 'normal'
   return 'out'
 }
 
@@ -144,24 +143,24 @@ function MarkerInfoPopup({ markerKey }) {
 
 function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow }) {
   const hasOptimal = optimalLow != null || optimalHigh != null
-  const hasNormal  = rangeLow  != null || rangeHigh  != null
+  const hasNormal = rangeLow != null || rangeHigh != null
   const filtered = entries.filter(e => e[markerKey] != null)
   const latest = filtered[filtered.length - 1]
-  const prev   = filtered[filtered.length - 2]
-  const delta  = latest && prev ? latest[markerKey] - prev[markerKey] : null
+  const prev = filtered[filtered.length - 2]
+  const delta = latest && prev ? latest[markerKey] - prev[markerKey] : null
 
   const val = latest?.[markerKey]
   let status = null
   if (val != null && (hasOptimal || hasNormal)) {
     const inOptimal = hasOptimal &&
-      (optimalLow  == null || val >= optimalLow) &&
+      (optimalLow == null || val >= optimalLow) &&
       (optimalHigh == null || val <= optimalHigh)
     const inNormal = hasNormal &&
-      (rangeLow  == null || val >= rangeLow) &&
+      (rangeLow == null || val >= rangeLow) &&
       (rangeHigh == null || val <= rangeHigh)
-    if (inOptimal)     status = 'optimal'
+    if (inOptimal) status = 'optimal'
     else if (inNormal) status = 'normal'
-    else               status = 'out'
+    else status = 'out'
   }
 
   const isOut = status === 'out'
@@ -170,7 +169,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
   const allVals = filtered.map(e => e[markerKey])
   const refVals = [
     ...(hasOptimal ? [optimalLow, optimalHigh] : []),
-    ...(hasNormal  ? [rangeLow,  rangeHigh]  : []),
+    ...(hasNormal ? [rangeLow, rangeHigh] : []),
   ]
   const dataMin = Math.min(...allVals, ...refVals, ...(allVals.length ? [] : [0]))
   const dataMax = Math.max(...allVals, ...refVals, ...(allVals.length ? [] : [100]))
@@ -179,9 +178,8 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
   const yMax = Math.ceil(dataMax + padding)
 
   return (
-    <div className={`bg-[#0d1422] border rounded-2xl p-6 flex flex-col gap-4 ${
-      isOut ? 'border-red-900' : 'border-[#1d2a3e]'
-    }`}>
+    <div className={`bg-[#0d1422] border rounded-2xl p-6 flex flex-col gap-4 ${isOut ? 'border-red-900' : 'border-[#1d2a3e]'
+      }`}>
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-white font-semibold text-base">{title}</h3>
@@ -189,11 +187,10 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
         </div>
         <div className="flex items-center gap-2">
           {status && (
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-              status === 'optimal' ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
-              status === 'normal'  ? 'border-amber-800  bg-amber-950  text-amber-400'  :
-                                     'border-red-800    bg-red-950    text-red-400'
-            }`}>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${status === 'optimal' ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
+                status === 'normal' ? 'border-amber-800  bg-amber-950  text-amber-400' :
+                  'border-red-800    bg-red-950    text-red-400'
+              }`}>
               {status === 'optimal' ? 'Optimal' : status === 'normal' ? 'Normal' : 'Out of range'}
             </span>
           )}
@@ -290,17 +287,14 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
 }
 
 const STATUS_FILTERS = [
-  { id: 'optimal', label: 'Optimal',      activeClass: 'border-emerald-700 bg-emerald-950 text-emerald-400' },
-  { id: 'normal',  label: 'Normal',       activeClass: 'border-amber-700   bg-amber-950   text-amber-400'   },
-  { id: 'out',     label: 'Out of Range', activeClass: 'border-red-700     bg-red-950     text-red-400'     },
+  { id: 'optimal', label: 'Optimal', activeClass: 'border-emerald-700 bg-emerald-950 text-emerald-400' },
+  { id: 'normal', label: 'Normal', activeClass: 'border-amber-700   bg-amber-950   text-amber-400' },
+  { id: 'out', label: 'Out of Range', activeClass: 'border-red-700     bg-red-950     text-red-400' },
 ]
 
-const SOURCE_LABEL = { blood_panel: 'Blood Panel', inbody: 'InBody Scan', other: 'Lab Report' }
-
-export default function LabsSection({ data, reports = [], userId, onRefresh }) {
+export default function LabsSection({ data }) {
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
   const [searchQuery, setSearchQuery] = useState('')
-  const [reportsOpen, setReportsOpen] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
   const entries = data?.entries ?? []
   const markers = data?.markers ?? {}
@@ -396,63 +390,16 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
                 <button
                   key={f.id}
                   onClick={() => toggleFilter(f.id)}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
-                    active
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${active
                       ? f.activeClass
                       : 'border-[#1d2a3e] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#2d3d58]'
-                  }`}
+                    }`}
                 >
                   {f.label}
                 </button>
               )
             })}
           </div>
-        </div>
-      )}
-
-      {/* Past reports — collapsible */}
-      {reports.length > 0 && (
-        <div className="mb-6">
-          <button
-            onClick={() => setReportsOpen(v => !v)}
-            className="flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] text-xs font-medium mb-2 transition-colors"
-          >
-            <svg
-              className={`w-3 h-3 transition-transform ${reportsOpen ? 'rotate-90' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            {reports.length} report{reports.length !== 1 ? 's' : ''}
-          </button>
-          {reportsOpen && (
-            <div className="flex flex-col gap-2">
-              {reports.map(r => (
-                <div key={r.id} className="flex items-center justify-between bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <svg className="w-4 h-4 text-[#475569] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <div>
-                      <span className="text-white text-sm font-medium">
-                        {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                      </span>
-                      <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
-                    </div>
-                    <span className="text-[#2d3d58] text-xs">{r.markers.length} markers</span>
-                  </div>
-                  <a
-                    href={api.labReportPdfUrl(userId, r.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#1d2a3e] hover:border-[#2d3d58] transition-colors"
-                  >
-                    View PDF
-                  </a>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -492,7 +439,7 @@ export default function LabsSection({ data, reports = [], userId, onRefresh }) {
           ))}
         </div>
       )}
-      {showRaw && <RawDataModal label="labs" data={{ blood: data, reports }} onClose={() => setShowRaw(false)} />}
+      {showRaw && <RawDataModal label="labs" data={{ blood: data }} onClose={() => setShowRaw(false)} />}
     </section>
   )
 }

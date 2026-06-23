@@ -185,9 +185,9 @@ function Dashboard() {
             <SleepSection    data={sleepData} />
             <ExerciseSection data={exerciseData}  userId={currentUserId} onRefresh={loadAll} />
             <HeartRateSection data={heartrateData} />
-            <LabsSection     data={bloodData}     reports={labReports?.reports ?? []} userId={currentUserId} onRefresh={loadAll} />
+            <LabsSection     data={bloodData} />
             <EventsSection   data={eventsData}    userId={currentUserId} onRefresh={loadAll} />
-            <ImportSection   userId={currentUserId} onRefresh={loadAll} />
+            <ImportSection   userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} />
           </>
         )}
       </main>

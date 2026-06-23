@@ -18,7 +18,7 @@ You will need 2 exports. One for Health and One for Exercise
 
 ## Import
 
-You can import from CSV or PDF
+You can import from CSV, PNG or PDF 
 
 **Rythm Health**
 
@@ -26,7 +26,7 @@ You can import from CSV or PDF
 
 **InBody**
 
-Just drop the PDF into the 'import' page, AI will OCR then import values. 
+Just drop the PDF/PNG/CSV into the 'import' page, AI will OCR then import values. 
 
 ## Related
 

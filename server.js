@@ -692,7 +692,9 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
-  const isCsv = req.file.originalname?.toLowerCase().endsWith('.csv')
+  const nameLower = req.file.originalname?.toLowerCase() ?? ''
+  const isCsv = nameLower.endsWith('.csv')
+  const isPng = nameLower.endsWith('.png')
 
   // ── 0. Duplicate check ────────────────────────────────────
   const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
@@ -707,6 +709,11 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
   try {
     const userContent = isCsv
       ? [{ type: 'text', text: `Extract all health metrics from this CSV health report and return only the JSON.\n\n${req.file.buffer.toString('utf8')}` }]
+      : isPng
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: req.file.buffer.toString('base64') } },
+          { type: 'text', text: 'Extract all health metrics from this health report image and return only the JSON.' },
+        ]
       : [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: req.file.buffer.toString('base64') } },
           { type: 'text', text: 'Extract all health metrics from this health report and return only the JSON.' },

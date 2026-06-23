@@ -9,6 +9,7 @@ import HeartRateSection from './components/HeartRateSection'
 import LabsSection from './components/LabsSection'
 import EventsSection from './components/EventsSection'
 import ImportSection from './components/ImportSection'
+import ExportModal from './components/ExportModal'
 
 const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'import']
 
@@ -71,6 +72,8 @@ function Dashboard() {
   const { currentUser, currentUserId } = useUser()
   const [activeSection, setActiveSection] = useState('body')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showExport, setShowExport] = useState(false)
+  const [printSections, setPrintSections] = useState(null)
   const [bodyData,      setBodyData]      = useState(null)
   const [sleepData,     setSleepData]     = useState(null)
   const [exerciseData,  setExerciseData]  = useState(null)
@@ -127,6 +130,45 @@ function Dashboard() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  function handlePrint(selected) {
+    setShowExport(false)
+    setPrintSections(selected)
+    setTimeout(() => {
+      window.print()
+      window.addEventListener('afterprint', () => setPrintSections(null), { once: true })
+    }, 100)
+  }
+
+  async function handleExportPng(selected) {
+    setShowExport(false)
+    setPrintSections(selected)
+    // Wait for React to re-render with excluded sections hidden
+    await new Promise(r => setTimeout(r, 150))
+    const { default: html2canvas } = await import('html2canvas')
+    const main = document.querySelector('main')
+    const canvas = await html2canvas(main, {
+      backgroundColor: '#070b12',
+      scale: 2,
+      useCORS: true,
+      height: main.scrollHeight,
+      windowHeight: main.scrollHeight,
+      onclone: (doc) => {
+        const el = doc.querySelector('main')
+        if (!el) return
+        el.style.marginLeft = '0'
+        el.style.paddingTop = '24px'
+        el.style.maxWidth = 'none'
+        el.style.overflow = 'visible'
+        doc.querySelectorAll('.no-print').forEach(n => { n.style.display = 'none' })
+      },
+    })
+    const link = document.createElement('a')
+    link.download = `health-${new Date().toISOString().slice(0, 10)}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+    setPrintSections(null)
+  }
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => entries.forEach(e => { if (e.isIntersecting) setActiveSection(e.target.id) }),
@@ -143,7 +185,7 @@ function Dashboard() {
       <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-20 h-14 bg-[#0a0f1a] border-b border-[#1d2a3e] flex items-center px-4 gap-3">
+      <div className="no-print md:hidden fixed top-0 left-0 right-0 z-20 h-14 bg-[#0a0f1a] border-b border-[#1d2a3e] flex items-center px-4 gap-3">
         <button
           onClick={() => setSidebarOpen(o => !o)}
           className="w-8 h-8 flex flex-col justify-center gap-1.5 text-[#94a3b8] hover:text-white"
@@ -158,11 +200,22 @@ function Dashboard() {
 
       <main className="md:ml-56 px-4 md:px-10 py-6 md:py-10 pt-20 md:pt-10 max-w-5xl">
         {/* Page header */}
-        <div className="mb-8 md:mb-10">
-          <h1 className="text-white text-2xl md:text-3xl font-bold tracking-tight">
-            {currentUser?.name ? `${currentUser.name.charAt(0).toUpperCase() + currentUser.name.slice(1)}'s Dashboard` : 'Dashboard'}
-          </h1>
-          <p className="text-[#475569] text-sm mt-1">Your personal health data, all in one place.</p>
+        <div className="no-print mb-8 md:mb-10 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-white text-2xl md:text-3xl font-bold tracking-tight">
+              {currentUser?.name ? `${currentUser.name.charAt(0).toUpperCase() + currentUser.name.slice(1)}'s Dashboard` : 'Dashboard'}
+            </h1>
+            <p className="text-[#475569] text-sm mt-1">Your personal health data, all in one place.</p>
+          </div>
+          <button
+            onClick={() => setShowExport(true)}
+            className="no-print flex-shrink-0 flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] border border-[#1d2a3e] hover:border-[#2d3d58] text-xs font-medium px-3 py-2 rounded-xl transition-colors mt-1"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Export
+          </button>
         </div>
 
         {error && (
@@ -181,16 +234,17 @@ function Dashboard() {
           </div>
         ) : (
           <>
-            <BodySection     data={bodyData}      events={eventsData} userId={currentUserId} onRefresh={loadAll} />
-            <SleepSection    data={sleepData} />
-            <ExerciseSection data={exerciseData}  userId={currentUserId} onRefresh={loadAll} />
-            <HeartRateSection data={heartrateData} />
-            <LabsSection     data={bloodData} reports={labReports?.reports ?? []} />
-            <EventsSection   data={eventsData}    userId={currentUserId} onRefresh={loadAll} />
-            <ImportSection   userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} />
+            <div className={printSections && !printSections.body      ? 'print-exclude' : ''}><BodySection      data={bodyData}      events={eventsData} userId={currentUserId} onRefresh={loadAll} /></div>
+            <div className={printSections && !printSections.sleep     ? 'print-exclude' : ''}><SleepSection     data={sleepData} /></div>
+            <div className={printSections && !printSections.exercise  ? 'print-exclude' : ''}><ExerciseSection  data={exerciseData}  userId={currentUserId} onRefresh={loadAll} /></div>
+            <div className={printSections && !printSections.heartrate ? 'print-exclude' : ''}><HeartRateSection data={heartrateData} /></div>
+            <div className={printSections && !printSections.labs      ? 'print-exclude' : ''}><LabsSection      data={bloodData}     reports={labReports?.reports ?? []} /></div>
+            <div className={printSections && !printSections.events    ? 'print-exclude' : ''}><EventsSection    data={eventsData}    userId={currentUserId} onRefresh={loadAll} /></div>
+            <div className="print-exclude"><ImportSection userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} /></div>
           </>
         )}
       </main>
+      {showExport && <ExportModal onClose={() => setShowExport(false)} onPrint={handlePrint} onExportPng={handleExportPng} />}
     </div>
   )
 }

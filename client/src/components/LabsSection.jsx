@@ -141,7 +141,7 @@ function MarkerInfoPopup({ markerKey }) {
   )
 }
 
-function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow }) {
+function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow, compact = false }) {
   const hasOptimal = optimalLow != null || optimalHigh != null
   const hasNormal = rangeLow != null || rangeHigh != null
   const filtered = entries.filter(e => e[markerKey] != null)
@@ -259,8 +259,8 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
             dataKey={markerKey}
             stroke={chartColor}
             strokeWidth={2.5}
-            dot={{ fill: chartColor, strokeWidth: 0, r: 5 }}
-            activeDot={{ r: 6, fill: chartColor, stroke: '#070b12', strokeWidth: 2 }}
+            dot={{ fill: chartColor, strokeWidth: 0, r: compact ? 3 : 5 }}
+            activeDot={{ r: compact ? 4 : 6, fill: chartColor, stroke: '#070b12', strokeWidth: 2 }}
             isAnimationActive={false}
           />
         </LineChart>
@@ -342,7 +342,7 @@ export default function LabsSection({ data }) {
   })).filter(s => s.keys.length > 0)
 
   const otherKeys = sortByStatus(allMarkerKeys.filter(k => !ALL_CATEGORIZED.has(k) && isVisible(k)))
-  if (otherKeys.length) sections.push({ label: 'Other', color: '#64748b', keys: otherKeys })
+  if (otherKeys.length) sections.push({ label: 'Other', color: '#64748b', keys: otherKeys, compact: true })
 
   return (
     <section id="labs" className="mb-16">
@@ -432,6 +432,7 @@ export default function LabsSection({ data }) {
                     optimalHigh={markers[key]?.optimal_high}
                     rangeLow={markers[key]?.range_low}
                     rangeHigh={markers[key]?.range_high}
+                    compact={section.compact ?? false}
                   />
                 ))}
               </div>

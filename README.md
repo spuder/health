@@ -16,6 +16,14 @@ Configure Apple Health apps to POST data to `http://your-dashboard:3001/api/{use
 
 You will need 2 exports. One for Health and One for Exercise
 
+## Import
+
+You can import from CSV or PDF
+
+**Rythm Health**
+
+![](./images/Rythm1.png)
+
 ## Related
 
 https://github.com/nixfred/apple-health-dashboard

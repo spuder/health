@@ -206,7 +206,7 @@ export default function BodySection({ data, events, userId, onRefresh }) {
       </div>
 
       {/* Weight chart */}
-      <WeightChart entries={entries} events={events?.entries ?? []} />
+      <WeightChart entries={entries} weightBySource={data?.weightBySource ?? {}} events={events?.entries ?? []} />
 
       {/* Trend charts: Weight · SMM · Body Fat Mass */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">

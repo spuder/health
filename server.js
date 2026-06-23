@@ -130,7 +130,16 @@ app.get('/api/:userId/body', requireUser, (req, res) => {
     ORDER BY date ASC, id ASC
   `).all(...BODY_METRICS)
 
-  res.json({ height_inches: req.user.height_inches, entries: pivotMetrics(rows) })
+  const weightRows = db.prepare(
+    `SELECT date, value, source FROM metrics WHERE metric = 'weight' ORDER BY date ASC`
+  ).all()
+  const weightBySource = {}
+  for (const { date, value, source } of weightRows) {
+    if (!weightBySource[source]) weightBySource[source] = []
+    weightBySource[source].push({ date, value })
+  }
+
+  res.json({ height_inches: req.user.height_inches, entries: pivotMetrics(rows), weightBySource })
 })
 
 app.post('/api/:userId/body', requireUser, (req, res) => {

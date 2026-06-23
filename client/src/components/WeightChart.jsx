@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ReferenceLine, ResponsiveContainer, Dot
+  ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 
 const RANGES = [
@@ -11,71 +11,102 @@ const RANGES = [
   { label: 'All', days: null },
 ]
 
-function filterByRange(entries, days) {
-  if (!days) return entries
+const SOURCE_META = {
+  apple_health: { label: 'Apple Health', color: '#a78bfa' },
+  pdf_import:   { label: 'InBody',       color: '#f97316' },
+  manual:       { label: 'Manual',       color: '#60a5fa' },
+}
+
+function filterByRange(points, days) {
+  if (!days) return points
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
-  return entries.filter(e => new Date(e.date) >= cutoff)
+  return points.filter(p => new Date(p.date) >= cutoff)
 }
 
 function formatDate(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00')
   if (days && days <= 7) return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  if (days && days <= 30) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   if (!d) return null
+  const entries = payload.filter(p => p.value != null)
+  if (!entries.length) return null
   return (
     <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
-      <p className="text-[#64748b] text-xs mb-1">
+      <p className="text-[#64748b] text-xs mb-2">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
       </p>
-      <p className="text-white text-xl font-semibold">{d.weight} <span className="text-[#64748b] text-sm font-normal">lbs</span></p>
-      {d.bmi && <p className="text-[#94a3b8] text-xs mt-1">BMI {d.bmi}</p>}
-      {d.notes && <p className="text-[#7c3aed] text-xs mt-1 italic">{d.notes}</p>}
+      {entries.map(p => (
+        <div key={p.dataKey} className="flex items-center gap-2 text-sm">
+          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: p.color }} />
+          <span style={{ color: p.color }} className="font-semibold">{p.value}</span>
+          <span className="text-[#64748b] text-xs">lbs</span>
+          <span className="text-[#475569] text-xs">{SOURCE_META[p.dataKey]?.label}</span>
+        </div>
+      ))}
     </div>
   )
 }
 
-function CustomDot({ cx, cy, payload, events, alwaysShow }) {
-  const hasEvent = events?.some(e => e.date === payload?.date)
-  if (hasEvent) return <circle cx={cx} cy={cy} r={5} fill="#a78bfa" stroke="#070b12" strokeWidth={2} />
-  if (alwaysShow) return <circle cx={cx} cy={cy} r={3} fill="#a78bfa" strokeWidth={0} />
-  return null
-}
-
-export default function WeightChart({ entries, events = [] }) {
+export default function WeightChart({ entries = [], weightBySource = {}, events = [] }) {
   const [range, setRange] = useState('1M')
   const activeDays = RANGES.find(r => r.label === range)?.days
 
-  const filtered = useMemo(() => filterByRange(entries.filter(e => e.weight != null), activeDays), [entries, activeDays])
-  const showDots = filtered.length <= 60
+  // Fall back to entries prop when server hasn't returned weightBySource yet
+  const effectiveBySource = useMemo(() => {
+    if (Object.keys(weightBySource).length > 0) return weightBySource
+    const pts = entries.filter(e => e.weight != null).map(e => ({ date: e.date, value: e.weight }))
+    return pts.length ? { weight: pts } : {}
+  }, [weightBySource, entries])
+
+  const chartData = useMemo(() => {
+    const dateSet = new Set()
+    for (const [, points] of Object.entries(effectiveBySource)) {
+      for (const p of filterByRange(points, activeDays)) dateSet.add(p.date)
+    }
+    const dates = [...dateSet].sort()
+    return dates.map(date => {
+      const entry = { date }
+      for (const [source, points] of Object.entries(effectiveBySource)) {
+        const point = points.find(p => p.date === date)
+        if (point) entry[source] = point.value
+      }
+      return entry
+    })
+  }, [effectiveBySource, activeDays])
+
+  const activeSources = useMemo(() =>
+    Object.keys(effectiveBySource).filter(s => filterByRange(effectiveBySource[s], activeDays).length > 0),
+    [effectiveBySource, activeDays]
+  )
 
   const eventDates = useMemo(() => {
-    const visible = events.filter(e => {
-      if (!activeDays) return true
-      const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() - activeDays)
-      return new Date(e.date) >= cutoff
-    })
-    return visible
+    if (!activeDays) return events
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - activeDays)
+    return events.filter(e => new Date(e.date) >= cutoff)
   }, [events, activeDays])
 
-  const yMin = useMemo(() => {
-    if (!filtered.length) return 160
-    return Math.floor(Math.min(...filtered.map(e => e.weight)) - 3)
-  }, [filtered])
+  const allValues = chartData.flatMap(d =>
+    activeSources.map(s => d[s]).filter(v => v != null)
+  )
+  const yMin = allValues.length ? Math.floor(Math.min(...allValues) - 3) : 160
+  const yMax = allValues.length ? Math.ceil(Math.max(...allValues) + 3) : 200
 
-  const yMax = useMemo(() => {
-    if (!filtered.length) return 200
-    return Math.ceil(Math.max(...filtered.map(e => e.weight)) + 3)
-  }, [filtered])
+  // Latest weight: prefer apple_health recency, fall back to any source
+  const preferredSource = activeSources.includes('apple_health') ? 'apple_health' : activeSources[0]
+  const rangePoints = preferredSource ? filterByRange(effectiveBySource[preferredSource] ?? [], activeDays) : []
+  const latestWeight = rangePoints.length ? rangePoints[rangePoints.length - 1].value : null
+  const delta = rangePoints.length > 1
+    ? (rangePoints[rangePoints.length - 1].value - rangePoints[0].value).toFixed(1)
+    : null
 
-  const gradientId = 'weightGradient'
+  const showDots = chartData.length <= 60
 
   return (
     <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-2xl p-6">
@@ -85,16 +116,13 @@ export default function WeightChart({ entries, events = [] }) {
           <h3 className="text-white font-semibold text-base">Weight</h3>
           <p className="text-[#475569] text-xs mt-0.5">lbs over time</p>
         </div>
-        {/* Range selector */}
         <div className="flex items-center gap-1 bg-[#070b12] border border-[#1d2a3e] rounded-lg p-1">
           {RANGES.map(r => (
             <button
               key={r.label}
               onClick={() => setRange(r.label)}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                range === r.label
-                  ? 'bg-[#7c3aed] text-white shadow'
-                  : 'text-[#64748b] hover:text-[#94a3b8]'
+                range === r.label ? 'bg-[#7c3aed] text-white shadow' : 'text-[#64748b] hover:text-[#94a3b8]'
               }`}
             >
               {r.label}
@@ -103,32 +131,26 @@ export default function WeightChart({ entries, events = [] }) {
         </div>
       </div>
 
-      {/* Latest value display */}
-      {filtered.length > 0 && (
+      {/* Latest value */}
+      {latestWeight != null && (
         <div className="flex items-end gap-3 mb-6">
-          <span className="text-4xl font-bold text-white">
-            {filtered[filtered.length - 1].weight}
-          </span>
+          <span className="text-4xl font-bold text-white">{latestWeight}</span>
           <span className="text-[#475569] text-sm mb-1">lbs</span>
-          {filtered.length > 1 && (() => {
-            const delta = (filtered[filtered.length - 1].weight - filtered[0].weight).toFixed(1)
-            const isDown = delta < 0
-            return (
-              <span className={`text-sm mb-1 font-medium ${isDown ? 'text-emerald-400' : 'text-red-400'}`}>
-                {isDown ? '↓' : '↑'} {Math.abs(delta)} lbs
-              </span>
-            )
-          })()}
+          {delta != null && Number(delta) !== 0 && (
+            <span className={`text-sm mb-1 font-medium ${delta < 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {delta < 0 ? '↓' : '↑'} {Math.abs(delta)} lbs
+            </span>
+          )}
         </div>
       )}
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={filtered} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
           <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
+            <linearGradient id="weightGradientAH" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#a78bfa" stopOpacity={0} />
             </linearGradient>
           </defs>
 
@@ -153,7 +175,6 @@ export default function WeightChart({ entries, events = [] }) {
 
           <Tooltip content={<CustomTooltip />} />
 
-          {/* Event reference lines */}
           {eventDates.map((ev, i) => (
             <ReferenceLine
               key={i}
@@ -165,29 +186,63 @@ export default function WeightChart({ entries, events = [] }) {
             />
           ))}
 
-          <Area
-            type="monotone"
-            dataKey="weight"
-            stroke="#a78bfa"
-            strokeWidth={2}
-            fill={`url(#${gradientId})`}
-            dot={showDots ? (props) => <CustomDot {...props} events={eventDates} alwaysShow /> : false}
-            activeDot={{ r: 5, fill: '#a78bfa', stroke: '#070b12', strokeWidth: 2 }}
-          />
-        </AreaChart>
+          {/* Apple Health — area fill + line */}
+          {activeSources.includes('apple_health') && (
+            <Area
+              type="monotone"
+              dataKey="apple_health"
+              stroke="#a78bfa"
+              strokeWidth={2}
+              fill="url(#weightGradientAH)"
+              connectNulls={false}
+              dot={showDots ? { r: 3, fill: '#a78bfa', strokeWidth: 0 } : false}
+              activeDot={{ r: 5, fill: '#a78bfa', stroke: '#070b12', strokeWidth: 2 }}
+            />
+          )}
+
+          {/* InBody / manual / fallback — line with prominent dots */}
+          {activeSources.filter(s => s !== 'apple_health').map(source => {
+            const color = SOURCE_META[source]?.color ?? '#94a3b8'
+            return (
+              <Line
+                key={source}
+                type="monotone"
+                dataKey={source}
+                stroke={color}
+                strokeWidth={2}
+                connectNulls={false}
+                dot={{ r: 5, fill: color, stroke: '#070b12', strokeWidth: 2 }}
+                activeDot={{ r: 7, fill: color, stroke: '#070b12', strokeWidth: 2 }}
+              />
+            )
+          })}
+        </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Legend for event markers */}
-      {eventDates.length > 0 && (
-        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[#1d2a3e]">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-px bg-emerald-400 opacity-70" style={{ borderTop: '2px dashed #34d399' }} />
-            <span className="text-[#475569] text-xs">Blood draw</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-px opacity-70" style={{ borderTop: '2px dashed #fbbf24' }} />
-            <span className="text-[#475569] text-xs">Doctor visit</span>
-          </div>
+      {/* Legend */}
+      {(activeSources.length > 0 || eventDates.length > 0) && (
+        <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[#1d2a3e] flex-wrap">
+          {activeSources.map(source => {
+            const meta = SOURCE_META[source] ?? { label: source, color: '#94a3b8' }
+            return (
+              <div key={source} className="flex items-center gap-1.5">
+                <div className="w-3 h-0.5 rounded-full" style={{ background: meta.color }} />
+                <span className="text-[#475569] text-xs">{meta.label}</span>
+              </div>
+            )
+          })}
+          {eventDates.some(e => e.type === 'blood_draw') && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-px opacity-70" style={{ borderTop: '2px dashed #34d399' }} />
+              <span className="text-[#475569] text-xs">Blood draw</span>
+            </div>
+          )}
+          {eventDates.some(e => e.type !== 'blood_draw') && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-px opacity-70" style={{ borderTop: '2px dashed #fbbf24' }} />
+              <span className="text-[#475569] text-xs">Doctor visit</span>
+            </div>
+          )}
         </div>
       )}
     </div>

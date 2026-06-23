@@ -47,8 +47,8 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
   }
 
   async function processFile(file) {
-    if (!file || (!file.name.endsWith('.pdf') && !file.name.endsWith('.csv'))) {
-      setError('Please upload a PDF or CSV file.')
+    if (!file || (!file.name.toLowerCase().endsWith('.pdf') && !file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.png'))) {
+      setError('Please upload a PDF, CSV, or PNG file.')
       return
     }
     setError(null)
@@ -132,7 +132,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
               : 'border-[#1d2a3e] bg-[#0d1422] hover:border-[#2d3d58] hover:bg-[#111827]'
             }`}
         >
-          <input ref={fileInputRef} type="file" accept=".pdf,.csv" className="hidden" onChange={handleFileInput} />
+          <input ref={fileInputRef} type="file" accept=".pdf,.PDF,.csv,.CSV,.png,.PNG" className="hidden" onChange={handleFileInput} />
           <div className="w-12 h-12 rounded-xl bg-[#1d2a3e] flex items-center justify-center">
             <svg className="w-6 h-6 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -140,7 +140,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           </div>
           <div className="text-center">
             <p className="text-[#94a3b8] text-sm font-medium">Drop a PDF or CSV here or click to browse</p>
-            <p className="text-[#2d3d58] text-xs mt-1">InBody scans · Blood panels · Lab reports</p>
+            <p className="text-[#2d3d58] text-xs mt-1">InBody scans · Blood panels · Lab reports · Screenshots</p>
           </div>
         </div>
       )}

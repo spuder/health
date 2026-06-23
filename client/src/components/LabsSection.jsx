@@ -76,10 +76,25 @@ function getMarkerStatus(key, entries, markers) {
   return 'out'
 }
 
-function CustomTooltip({ active, payload, unit, markerKey }) {
+const SOURCE_LABEL = { apple_health: 'Apple Health', manual: 'Manual' }
+
+function sourceLabel(source, date, reports) {
+  if (source === 'pdf_import') {
+    const report = reports.find(r => r.date === date)
+    if (report?.filename) {
+      const name = report.filename.replace(/\.[^.]+$/, '') // strip extension
+      return name.length > 28 ? name.slice(0, 26) + '…' : name
+    }
+    return 'Lab Import'
+  }
+  return SOURCE_LABEL[source] ?? source ?? 'Unknown'
+}
+
+function CustomTooltip({ active, payload, unit, markerKey, reports }) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   if (!d) return null
+  const src = d.source ? sourceLabel(d.source, d.date, reports) : null
   return (
     <div className="bg-[#0d1422] border border-[#1d2a3e] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-1">
@@ -88,6 +103,7 @@ function CustomTooltip({ active, payload, unit, markerKey }) {
       <p className="text-white text-xl font-semibold">
         {d[markerKey]} <span className="text-[#64748b] text-sm font-normal">{unit}</span>
       </p>
+      {src && <p className="text-[#475569] text-xs mt-1">{src}</p>}
       {d.notes && <p className="text-[#7c3aed] text-xs mt-1 italic">{d.notes}</p>}
     </div>
   )
@@ -141,7 +157,7 @@ function MarkerInfoPopup({ markerKey }) {
   )
 }
 
-function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow, compact = false }) {
+function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow, compact = false, reports = [] }) {
   const hasOptimal = optimalLow != null || optimalHigh != null
   const hasNormal = rangeLow != null || rangeHigh != null
   const filtered = entries.filter(e => e[markerKey] != null)
@@ -238,7 +254,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
             tickCount={4}
           />
 
-          <Tooltip content={<CustomTooltip unit={unit} markerKey={markerKey} />} />
+          <Tooltip content={<CustomTooltip unit={unit} markerKey={markerKey} reports={reports} />} />
 
           {hasNormal && (
             <ReferenceArea y1={rangeLow ?? yMin} y2={rangeHigh ?? yMax} fill={`url(#norm-${markerKey})`} stroke="none" />
@@ -292,7 +308,7 @@ const STATUS_FILTERS = [
   { id: 'out', label: 'Out of Range', activeClass: 'border-red-700     bg-red-950     text-red-400' },
 ]
 
-export default function LabsSection({ data }) {
+export default function LabsSection({ data, reports = [] }) {
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
   const [searchQuery, setSearchQuery] = useState('')
   const [showRaw, setShowRaw] = useState(false)
@@ -433,6 +449,7 @@ export default function LabsSection({ data }) {
                     rangeLow={markers[key]?.range_low}
                     rangeHigh={markers[key]?.range_high}
                     compact={section.compact ?? false}
+                    reports={reports}
                   />
                 ))}
               </div>

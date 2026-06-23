@@ -24,6 +24,10 @@ You can import from CSV or PDF
 
 ![](./images/Rythm1.png)
 
+**InBody**
+
+Just drop the PDF into the 'import' page, AI will OCR then import values. 
+
 ## Related
 
 https://github.com/nixfred/apple-health-dashboard

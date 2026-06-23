@@ -692,38 +692,31 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
+  const isCsv = req.file.originalname?.toLowerCase().endsWith('.csv')
+
   // ── 0. Duplicate check ────────────────────────────────────
   const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
   const db0 = getDb(req.params.userId)
   const existing = db0.prepare(`SELECT id, date FROM lab_reports WHERE file_hash = ?`).get(fileHash)
   if (existing) {
-    return res.status(409).json({ error: `Duplicate: this PDF was already imported (report from ${existing.date})` })
+    return res.status(409).json({ error: `Duplicate: this file was already imported (report from ${existing.date})` })
   }
 
-  // ── 1. Send PDF directly to Claude ───────────────────────
+  // ── 1. Send file to Claude ────────────────────────────────
   let parsed
   try {
+    const userContent = isCsv
+      ? [{ type: 'text', text: `Extract all health metrics from this CSV health report and return only the JSON.\n\n${req.file.buffer.toString('utf8')}` }]
+      : [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: req.file.buffer.toString('base64') } },
+          { type: 'text', text: 'Extract all health metrics from this health report and return only the JSON.' },
+        ]
+
     const msg = await anthropic.messages.create({
       model: 'claude-opus-4-8',
       max_tokens: 1024,
       system: LAB_SYSTEM_PROMPT,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: req.file.buffer.toString('base64'),
-            },
-          },
-          {
-            type: 'text',
-            text: 'Extract all health metrics from this health report and return only the JSON.',
-          },
-        ],
-      }],
+      messages: [{ role: 'user', content: userContent }],
     })
 
     const raw = msg.content[0].text.trim()
@@ -738,7 +731,7 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
   console.log('[labs-pdf] Claude OCR result:')
   console.log(JSON.stringify(parsed, null, 2))
 
-  res.json({ ok: true, debug: true, parsed })
+  res.json({ ok: true, debug: true, parsed, file_hash: fileHash })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -749,7 +742,7 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
 // ─────────────────────────────────────────────────────────────
 
 app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
-  const { date, source_type, metrics, reference_ranges } = req.body
+  const { date, source_type, metrics, reference_ranges, file_hash } = req.body
   if (!date || !metrics) return res.status(400).json({ error: 'date and metrics are required' })
 
   const validMetrics = Object.entries(metrics)
@@ -789,9 +782,9 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
         rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
       }
       db.prepare(`
-        INSERT INTO lab_reports (date, filename, source_type, markers_json)
-        VALUES (?, ?, ?, ?)
-      `).run(date, 'ocr_import', source_type ?? 'other', JSON.stringify(markerNames))
+        INSERT INTO lab_reports (date, filename, source_type, markers_json, file_hash)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(date, 'ocr_import', source_type ?? 'other', JSON.stringify(markerNames), file_hash ?? null)
     })()
     console.log(`[labs-confirm] Saved ${validMetrics.length} metrics for ${req.params.userId}`)
     res.json({ ok: true, count: validMetrics.length, markers_found: markerNames })

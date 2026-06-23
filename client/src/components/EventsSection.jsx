@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api'
 import LogModal from './LogModal'
 import RawDataModal from './RawDataModal'
@@ -21,6 +21,24 @@ const EVENT_TYPES = {
 }
 
 function EventCard({ event, onDelete }) {
+  const [confirming, setConfirming] = useState(false)
+  const timerRef = useRef()
+
+  function startConfirm() {
+    setConfirming(true)
+    timerRef.current = setTimeout(() => setConfirming(false), 3000)
+  }
+  function cancel() {
+    clearTimeout(timerRef.current)
+    setConfirming(false)
+  }
+  function confirm() {
+    clearTimeout(timerRef.current)
+    setConfirming(false)
+    onDelete()
+  }
+  useEffect(() => () => clearTimeout(timerRef.current), [])
+
   const cfg = EVENT_TYPES[event.type] ?? {
     label: event.type,
     icon: '📌',
@@ -55,13 +73,21 @@ function EventCard({ event, onDelete }) {
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.badge}`}>
               {cfg.label}
             </span>
-            <button
-              onClick={() => onDelete()}
-              className="text-[#374d6c] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-sm"
-              title="Delete event"
-            >
-              ✕
-            </button>
+            {confirming ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#94a3b8] text-xs">Delete?</span>
+                <button onClick={confirm} className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors">Yes</button>
+                <button onClick={cancel} className="text-xs text-[#475569] hover:text-[#94a3b8] transition-colors">No</button>
+              </div>
+            ) : (
+              <button
+                onClick={startConfirm}
+                className="text-[#374d6c] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-sm"
+                title="Delete event"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 

@@ -84,6 +84,61 @@ function getMarkerStatus(key, entries, markers) {
   return 'out'
 }
 
+function LabTableRow({ markerKey, markers, entries }) {
+  const unit = markers[markerKey]?.unit ?? ''
+  const filtered = entries.filter(e => e[markerKey] != null).sort((a, b) => a.date.localeCompare(b.date))
+  if (filtered.length === 0) return null
+
+  const last3 = filtered.slice(-3)
+  const latest = last3[last3.length - 1]
+  const prevEntry = last3[last3.length - 2]
+  const pct = latest && prevEntry
+    ? ((latest[markerKey] - prevEntry[markerKey]) / Math.abs(prevEntry[markerKey])) * 100
+    : null
+
+  const status = getMarkerStatus(markerKey, entries, markers)
+  const isOut = status === 'out'
+
+  return (
+    <div className="flex items-center px-4 py-2.5 border-b border-[#161f30] last:border-0 hover:bg-[#0f1825]/50 transition-colors gap-3">
+      <div className="flex-1 min-w-0">
+        <span className="text-[#cbd5e1] text-sm">{toTitle(markerKey)}</span>
+      </div>
+      <div className="flex items-center gap-4 flex-shrink-0">
+        {last3.map((entry, i) => {
+          const v = entry[markerKey]
+          const isLast = i === last3.length - 1
+          return (
+            <div key={entry.date} className="flex flex-col items-end gap-0.5">
+              <span className={`text-sm font-medium tabular-nums ${isLast && isOut ? 'text-red-400' : isLast ? 'text-white' : 'text-[#475569]'}`}>
+                {v}{unit && <span className="text-[#374d6c] text-xs ml-0.5">{unit}</span>}
+              </span>
+              <span className="text-[#374d6c] text-[10px] tabular-nums">
+                {new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+          )
+        })}
+        <div className="flex items-center gap-1.5 w-16 justify-end">
+          {status && (
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+              status === 'optimal' ? 'bg-emerald-400' :
+              status === 'normal' ? 'bg-blue-400' : 'bg-red-400'
+            }`} />
+          )}
+          {pct != null && (
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+              pct < 0 ? 'text-emerald-400 border-emerald-900 bg-emerald-950' : 'text-rose-400 border-rose-900 bg-rose-950'
+            }`}>
+              {pct > 0 ? '+' : ''}{pct.toFixed(0)}%
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const SOURCE_LABEL = { apple_health: 'Apple Health', manual: 'Manual' }
 
 function sourceLabel(source, date, reports) {
@@ -212,8 +267,8 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
         <div className="flex items-center gap-2">
           {status && (
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${status === 'optimal' ? 'border-emerald-800 bg-emerald-950 text-emerald-400' :
-                status === 'normal' ? 'border-amber-800  bg-amber-950  text-amber-400' :
-                  'border-red-800    bg-red-950    text-red-400'
+              status === 'normal' ? 'border-amber-800  bg-amber-950  text-amber-400' :
+                'border-red-800    bg-red-950    text-red-400'
               }`}>
               {status === 'optimal' ? 'Optimal' : status === 'normal' ? 'Normal' : 'Out of range'}
             </span>
@@ -320,6 +375,7 @@ export default function LabsSection({ data, reports = [] }) {
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
   const [searchQuery, setSearchQuery] = useState('')
   const [showRaw, setShowRaw] = useState(false)
+  const [layout, setLayout] = useState('card')
   const entries = data?.entries ?? []
   const markers = data?.markers ?? {}
 
@@ -327,6 +383,13 @@ export default function LabsSection({ data, reports = [] }) {
   const allKeysInData = [...new Set(entries.flatMap(e => Object.keys(e).filter(k => !SKIP_KEYS.has(k))))]
   const unknownKeys = allKeysInData.filter(k => !knownKeys.includes(k)).sort()
   const allMarkerKeys = [...knownKeys.filter(k => allKeysInData.includes(k)), ...unknownKeys]
+
+  const allDates = [...new Set(entries.map(e => e.date))].sort()
+  const labDates = allDates.filter(d => {
+    const entry = entries.find(e => e.date === d)
+    return entry && [...ALL_CATEGORIZED].some(k => entry[k] != null)
+  })
+  const colDates = labDates.slice(-3)
 
   // Stable color index by position in allMarkerKeys so colors don't shift when filtering
   const colorIndex = Object.fromEntries(allMarkerKeys.map((k, i) => [k, i]))
@@ -376,7 +439,21 @@ export default function LabsSection({ data, reports = [] }) {
           <div className="w-1 h-6 rounded-full bg-emerald-500" />
           <h2 className="text-white text-xl font-semibold">Labs</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-[#0d1520] border border-[#243450] rounded-lg overflow-hidden">
+            <button
+              onClick={() => setLayout('table')}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${layout === 'table' ? 'bg-[#1e2d45] text-white' : 'text-[#475569] hover:text-[#94a3b8]'}`}
+            >
+              Table
+            </button>
+            <button
+              onClick={() => setLayout('card')}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${layout === 'card' ? 'bg-[#1e2d45] text-white' : 'text-[#475569] hover:text-[#94a3b8]'}`}
+            >
+              Card
+            </button>
+          </div>
           <button onClick={() => setShowRaw(true)} className="font-mono text-[10px] text-[#243450] hover:text-[#475569] px-1 transition-colors" title="raw data">{'{}'}</button>
         </div>
       </div>
@@ -415,8 +492,8 @@ export default function LabsSection({ data, reports = [] }) {
                   key={f.id}
                   onClick={() => toggleFilter(f.id)}
                   className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${active
-                      ? f.activeClass
-                      : 'border-[#243450] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#374d6c]'
+                    ? f.activeClass
+                    : 'border-[#243450] bg-transparent text-[#475569] hover:text-[#94a3b8] hover:border-[#374d6c]'
                     }`}
                 >
                   {f.label}
@@ -435,7 +512,7 @@ export default function LabsSection({ data, reports = [] }) {
         <div className="flex items-center justify-center py-16 text-[#374d6c] text-sm">
           {searchQuery ? `No markers match "${searchQuery}"` : 'No markers match the selected filters'}
         </div>
-      ) : (
+      ) : layout === 'card' ? (
         <div className="flex flex-col gap-8">
           {sections.map(section => (
             <div key={section.label}>
@@ -459,6 +536,22 @@ export default function LabsSection({ data, reports = [] }) {
                     compact={section.compact ?? false}
                     reports={reports}
                   />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {sections.map(section => (
+            <div key={section.label}>
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-1 h-4 rounded-full" style={{ backgroundColor: section.color }} />
+                <h3 className="text-[#94a3b8] text-sm font-medium">{section.label}</h3>
+              </div>
+              <div className="bg-[#131d2e] border border-[#243450] rounded-2xl overflow-hidden">
+                {section.keys.map(key => (
+                  <LabTableRow key={key} markerKey={key} markers={markers} entries={entries} />
                 ))}
               </div>
             </div>

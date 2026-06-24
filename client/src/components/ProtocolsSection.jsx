@@ -371,8 +371,8 @@ export default function ProtocolsSection({ data = [], userId, onRefresh }) {
           ))}
         </div>
         {/* Side fade hints */}
-        <div className="pointer-events-none absolute left-0 top-0 bottom-2 w-16 bg-gradient-to-r from-[#0d1520] to-transparent" />
-        <div className="pointer-events-none absolute right-0 top-0 bottom-2 w-16 bg-gradient-to-l from-[#0d1520] to-transparent" />
+        <div className="pointer-events-none absolute left-0 top-0 bottom-2 w-6 sm:w-16 bg-gradient-to-r from-[#0d1520] to-transparent" />
+        <div className="pointer-events-none absolute right-0 top-0 bottom-2 w-6 sm:w-16 bg-gradient-to-l from-[#0d1520] to-transparent" />
       </div>
     </section>
   )

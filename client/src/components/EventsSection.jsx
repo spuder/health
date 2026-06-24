@@ -23,8 +23,10 @@ const EVENT_TYPES = {
 function EventCard({ event, onDelete }) {
   const [confirming, setConfirming] = useState(false)
   const timerRef = useRef()
+  const confirmStartedAt = useRef(0)
 
   function startConfirm() {
+    confirmStartedAt.current = Date.now()
     setConfirming(true)
     timerRef.current = setTimeout(() => setConfirming(false), 3000)
   }
@@ -33,6 +35,7 @@ function EventCard({ event, onDelete }) {
     setConfirming(false)
   }
   function confirm() {
+    if (Date.now() - confirmStartedAt.current < 350) return  // block ghost click on mobile
     clearTimeout(timerRef.current)
     setConfirming(false)
     onDelete()
@@ -82,7 +85,7 @@ function EventCard({ event, onDelete }) {
             ) : (
               <button
                 onClick={startConfirm}
-                className="text-[#374d6c] hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-sm"
+                className="text-[#374d6c] hover:text-red-400 transition-colors sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto text-sm"
                 title="Delete event"
               >
                 ✕

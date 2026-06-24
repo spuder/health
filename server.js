@@ -430,12 +430,21 @@ const HAE_METRIC_MAP = {
   respiratory_rate: 'respiratory_rate',
   body_temperature: 'body_temp_f',
   apple_sleeping_wrist_temperature: 'wrist_temp_c',
-  // Sleep
+  // Sleep — HAE uses several names depending on version/settings
   sleep_analysis: 'sleep_hours',
+  sleep_analysis_asleep: 'sleep_hours',
+  sleep_analysis_in_bed: null,             // ignore in-bed time
+  sleep_analysis_deep: 'deep_sleep_hours',
+  sleep_analysis_deep_sleep: 'deep_sleep_hours',
+  sleep_analysis_rem: 'rem_sleep_hours',
+  sleep_analysis_rem_sleep: 'rem_sleep_hours',
+  sleep_analysis_core: null,               // no field for core yet
+  sleep_analysis_core_sleep: null,
 }
 
 function convertUnit(haeMetricName, qty, units) {
   if (haeMetricName === 'body_mass' && units === 'kg') return Math.round(qty * 2.20462 * 10) / 10
+  if (haeMetricName?.includes('sleep') && units === 'min') return Math.round(qty / 60 * 100) / 100
   return Math.round(qty * 10) / 10
 }
 
@@ -474,9 +483,15 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
     }
   }
 
+  const sleepMetricNames = metrics.filter(m => m.name?.includes('sleep')).map(m => ({ name: m.name, units: m.units, count: m.data?.length, sample: m.data?.[0] }))
+  if (sleepMetricNames.length) console.log('[import sleep metrics]', JSON.stringify(sleepMetricNames, null, 2))
+  else console.log('[import] no sleep metrics found in payload. all metric names:', metrics.map(m => m.name))
+
   const importAll = db.transaction(() => {
     for (const { name, units, data = [] } of metrics) {
-      const metricName = HAE_METRIC_MAP[name] || name
+      const mappedName = name in HAE_METRIC_MAP ? HAE_METRIC_MAP[name] : name
+      if (mappedName === null) { stats.skipped += data.length; continue }  // explicitly ignored metric
+      const metricName = mappedName
 
       if (name === 'body_mass') {
         console.log(`[import body_mass] ${data.length} points, units=${units}, sample keys:`, data[0] ? Object.keys(data[0]) : 'none')

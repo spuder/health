@@ -34,6 +34,8 @@ const LAB_CATEGORIES = [
     color: '#f472b6',
     keys: [
       'oxidative_stress_adduct', 'dna_fragmentation_index', 'high_dna_stainability',
+      'semen_volume', 'semen_ph', 'sperm_progressive_motility', 'total_sperm_motility',
+      'sperm_morphology', 'sperm_count_per_ml', 'total_sperm_count', 'total_progressive_sperm_count',
     ],
   },
   {
@@ -53,6 +55,14 @@ const LAB_CATEGORIES = [
 ]
 
 const ALL_CATEGORIZED = new Set(LAB_CATEGORIES.flatMap(c => c.keys))
+
+function fmtRange(low, high, unit) {
+  const u = unit ? ` ${unit}` : ''
+  if (low != null && high != null) return `${low}–${high}${u}`
+  if (low != null) return `≥ ${low}${u}`
+  if (high != null) return `≤ ${high}${u}`
+  return ''
+}
 
 function toTitle(key) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -249,7 +259,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
   const refVals = [
     ...(hasOptimal ? [optimalLow, optimalHigh] : []),
     ...(hasNormal ? [rangeLow, rangeHigh] : []),
-  ]
+  ].filter(v => v != null)
   const dataMin = Math.min(...allVals, ...refVals, ...(allVals.length ? [] : [0]))
   const dataMax = Math.max(...allVals, ...refVals, ...(allVals.length ? [] : [100]))
   const padding = (dataMax - dataMin) * 0.25 || 10
@@ -350,13 +360,13 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
           {hasOptimal && (
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm bg-emerald-400" style={{ opacity: 0.5 }} />
-              <span>Optimal {optimalLow}–{optimalHigh}{unit ? ` ${unit}` : ''}</span>
+              <span>Optimal {fmtRange(optimalLow, optimalHigh, unit)}</span>
             </div>
           )}
           {hasNormal && (
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm bg-blue-400" style={{ opacity: 0.4 }} />
-              <span>Normal {rangeLow}–{rangeHigh}{unit ? ` ${unit}` : ''}</span>
+              <span>Normal {fmtRange(rangeLow, rangeHigh, unit)}</span>
             </div>
           )}
         </div>

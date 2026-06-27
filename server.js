@@ -251,6 +251,15 @@ const BLOOD_MARKERS = {
   ggt: { unit: 'U/L', range_low: 8, range_high: 40, optimal_low: 8, optimal_high: 25 },
   alkaline_phosphatase: { unit: 'U/L', range_low: 30, range_high: 120, optimal_low: 40, optimal_high: 80 },
   total_bilirubin: { unit: 'mg/dL', range_low: 0.2, range_high: 1.2, optimal_low: 0.2, optimal_high: 0.8 },
+  // Semen analysis
+  semen_volume: { unit: 'mL', range_low: 1.4, range_high: null },
+  semen_ph: { unit: '', range_low: 7.2, range_high: null },
+  sperm_progressive_motility: { unit: '%', range_low: 32, range_high: null },
+  total_sperm_motility: { unit: '%', range_low: 40, range_high: null },
+  sperm_morphology: { unit: '%', range_low: 4, range_high: null },
+  sperm_count_per_ml: { unit: 'M/mL', range_low: 15, range_high: null },
+  total_sperm_count: { unit: 'M', range_low: 39, range_high: null },
+  total_progressive_sperm_count: { unit: 'M', range_low: 12.5, range_high: null },
 }
 
 app.get('/api/:userId/blood', requireUser, (req, res) => {

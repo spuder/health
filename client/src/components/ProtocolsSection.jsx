@@ -165,6 +165,8 @@ function AddSubInput({ onAdd, onCancel }) {
 // ── Protocol row ─────────────────────────────────────────────────
 function ProtocolRow({ protocol, userId, onRefresh }) {
   const [addingSub, setAddingSub] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   async function saveName(name) {
     await api.updateProtocol(userId, protocol.id, { name, color: protocol.color })
@@ -183,6 +185,18 @@ function ProtocolRow({ protocol, userId, onRefresh }) {
     setAddingSub(false)
     onRefresh()
   }
+  async function copyToNext() {
+    if (copying) return
+    setCopying(true)
+    try {
+      await api.copyProtocolToNextMonth(userId, protocol.id)
+      onRefresh()
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } finally {
+      setCopying(false)
+    }
+  }
 
   return (
     <div className="group/row py-3 border-b border-[#131d2e] last:border-0">
@@ -191,6 +205,13 @@ function ProtocolRow({ protocol, userId, onRefresh }) {
           <Editable value={protocol.name} onSave={saveName} className="text-[#cbd5e1] text-base font-medium" />
         </span>
         <ColorDot color={protocol.color} onChange={saveColor} />
+        <button
+          onClick={copyToNext}
+          title="Copy to next month"
+          className="opacity-0 group-hover/row:opacity-100 text-[#374d6c] hover:text-[#94a3b8] text-xs transition-all leading-none"
+        >
+          {copied ? '✓' : '→'}
+        </button>
         <button
           onClick={del}
           className="opacity-0 group-hover/row:opacity-100 text-[#374d6c] hover:text-red-400 text-sm transition-all leading-none"

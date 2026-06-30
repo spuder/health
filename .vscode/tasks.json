@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Make",
+      "type": "shell",
+      "command": "make ${input:makeTarget}",
+      "inAgents": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "makeTarget",
+      "type": "pickString",
+      "description": "Which make target do you want to run?",
+      "options": [
+        "build-podman",
+        "stop-podman",
+        "build-container",
+        "stop-container",
+        "publish",
+        "clean"
+      ],
+      "default": "build-container"
+    }
+  ]
+}

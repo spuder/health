@@ -58,7 +58,8 @@ export const api = {
   deleteProtocol:    (userId, id)       => req(`/${userId}/protocols/${id}`, { method: 'DELETE' }),
   addSubProtocol:    (userId, pid, data)=> req(`/${userId}/protocols/${pid}/sub`, { method: 'POST', body: JSON.stringify(data) }),
   updateSubProtocol: (userId, id, data) => req(`/${userId}/sub-protocols/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteSubProtocol: (userId, id)       => req(`/${userId}/sub-protocols/${id}`, { method: 'DELETE' }),
+  deleteSubProtocol:      (userId, id)       => req(`/${userId}/sub-protocols/${id}`, { method: 'DELETE' }),
+  copyProtocolToNextMonth:(userId, id)       => req(`/${userId}/protocols/${id}/copy-to-next`, { method: 'POST' }),
 
   importLabsPdf: async (userId, file) => {
     const form = new FormData()

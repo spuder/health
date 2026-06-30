@@ -894,6 +894,41 @@ app.delete('/api/:userId/sub-protocols/:id', requireUser, (req, res) => {
   res.json({ ok: true })
 })
 
+app.post('/api/:userId/protocols/:id/copy-to-next', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const src = db.prepare('SELECT * FROM protocols WHERE id = ?').get(req.params.id)
+  if (!src) return res.status(404).json({ error: 'not found' })
+
+  const [y, m] = src.month.split('-').map(Number)
+  const d = new Date(y, m)
+  const nextMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
+  const subs = db.prepare('SELECT * FROM sub_protocols WHERE protocol_id = ?').all(src.id)
+
+  const existing = db.prepare(
+    "SELECT * FROM protocols WHERE month = ? AND LOWER(name) = LOWER(?)"
+  ).get(nextMonth, src.name)
+
+  if (existing) {
+    const existingSubs = db.prepare('SELECT * FROM sub_protocols WHERE protocol_id = ?').all(existing.id)
+    const existingNames = new Set(existingSubs.map(s => s.name.toLowerCase()))
+    for (const sub of subs) {
+      if (!existingNames.has(sub.name.toLowerCase())) {
+        db.prepare('INSERT INTO sub_protocols (protocol_id, name) VALUES (?, ?)').run(existing.id, sub.name)
+      }
+    }
+  } else {
+    const { lastInsertRowid } = db.prepare(
+      'INSERT INTO protocols (month, name, color) VALUES (?, ?, ?)'
+    ).run(nextMonth, src.name, src.color)
+    for (const sub of subs) {
+      db.prepare('INSERT INTO sub_protocols (protocol_id, name) VALUES (?, ?)').run(lastInsertRowid, sub.name)
+    }
+  }
+
+  res.json({ ok: true, nextMonth })
+})
+
 // ─────────────────────────────────────────────────────────────
 // SPA fallback
 // ─────────────────────────────────────────────────────────────

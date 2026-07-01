@@ -18,6 +18,13 @@ const EVENT_TYPES = {
     badge: 'text-emerald-400 bg-emerald-950 border-emerald-700',
     dot: 'bg-emerald-400',
   },
+  life_event: {
+    label: 'Life Event',
+    icon: '⭐',
+    color: 'border-sky-700 bg-sky-950',
+    badge: 'text-sky-400 bg-sky-950 border-sky-700',
+    dot: 'bg-sky-400',
+  },
 }
 
 function EventCard({ event, onDelete }) {

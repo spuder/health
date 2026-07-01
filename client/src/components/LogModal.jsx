@@ -239,6 +239,7 @@ function EventForm({ onSubmit, onClose, loading }) {
           <select value={type} onChange={e => setType(e.target.value)}>
             <option value="doctor_visit">Doctor Visit</option>
             <option value="blood_draw">Blood Draw</option>
+            <option value="life_event">Life Event</option>
           </select>
         </Field>
       </div>

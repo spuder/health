@@ -101,6 +101,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
       setImportCount(result.count)
       setPhase('done')
       onRefresh?.()
+      setTimeout(resetToIdle, 1000)
     } catch (err) {
       setError(err.message)
       setPhase('preview')

@@ -125,7 +125,10 @@ function LabTableRow({ markerKey, markers, entries }) {
                 {v}{unit && <span className="text-[#374d6c] text-xs ml-0.5">{unit}</span>}
               </span>
               <span className="text-[#374d6c] text-[10px] tabular-nums">
-                {new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', {
+                  month: 'short', day: 'numeric',
+                  ...(entry.date.slice(0, 4) !== String(new Date().getFullYear()) && { year: 'numeric' }),
+                })}
               </span>
             </div>
           )

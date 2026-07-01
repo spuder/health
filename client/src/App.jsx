@@ -14,6 +14,13 @@ import ExportModal from './components/ExportModal'
 
 const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'protocols', 'import']
 
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `${r}, ${g}, ${b}`
+}
+
 // ── Onboarding (no users yet) ────────────────────────────────
 function OnboardingScreen() {
   const { addUser, switchUser } = useUser()
@@ -186,7 +193,7 @@ function Dashboard() {
   }, [loading])
 
   return (
-    <div className="min-h-screen bg-[#0d1520]">
+    <div className="min-h-screen bg-[#0d1520]" style={{ backgroundImage: `radial-gradient(ellipse 120% 60% at 60% 0%, rgba(${hexToRgb(currentUser?.color ?? '#7c3aed')}, 0.18) 0%, transparent 100%), radial-gradient(ellipse 60% 40% at 100% 100%, rgba(${hexToRgb(currentUser?.color ?? '#7c3aed')}, 0.07) 0%, transparent 70%)` }}>
       <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Mobile top bar */}

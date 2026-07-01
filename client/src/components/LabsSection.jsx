@@ -34,8 +34,9 @@ const LAB_CATEGORIES = [
     color: '#f472b6',
     keys: [
       'oxidative_stress_adduct', 'dna_fragmentation_index', 'high_dna_stainability',
-      'semen_volume', 'semen_ph', 'sperm_progressive_motility', 'total_sperm_motility',
-      'sperm_morphology', 'sperm_count_per_ml', 'total_sperm_count', 'total_progressive_sperm_count',
+      'semen_volume', 'semen_ph', 'sperm_progressive_motility', 'sperm_non_progressive_motility',
+      'sperm_non_motile', 'total_sperm_motility', 'sperm_morphology', 'sperm_count_per_ml',
+      'total_sperm_count', 'total_progressive_sperm_count',
     ],
   },
   {

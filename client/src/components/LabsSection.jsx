@@ -112,8 +112,9 @@ function LabTableRow({ markerKey, markers, entries }) {
 
   return (
     <div className="flex items-center px-4 py-2.5 border-b border-[#161f30] last:border-0 hover:bg-[#0f1825]/50 transition-colors gap-3">
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
         <span className="text-[#cbd5e1] text-sm">{toTitle(markerKey)}</span>
+        <MarkerInfoPopup markerKey={markerKey} />
       </div>
       <div className="flex items-center gap-4 flex-shrink-0">
         {last3.map((entry, i) => {
@@ -198,6 +199,10 @@ const MARKER_INFO = {
   hscrp: {
     summary: 'High-sensitivity inflammation marker — detects low-grade chronic inflammation.',
     details: 'hsCRP is produced by the liver in response to inflammation anywhere in the body. Chronically elevated levels signal that your immune system is quietly active, which accelerates arterial plaque buildup and raises heart attack risk independently of cholesterol. Common drivers: poor sleep, visceral fat, processed food, gum disease, overtraining, or hidden infection. Below 1.0 mg/L is low risk; 1–3 is moderate; above 3 is high.',
+  },
+  sperm_count_per_ml: {
+    summary: 'Sperm concentration — how many sperm are in each milliliter of semen.',
+    details: 'Dr. Shanna Swan\'s research documented a sharp historical decline: in 1973 the average was ~99 million/mL; by 2011 it had fallen to ~43 million/mL — a drop of more than 50% in under 40 years. The WHO\'s current lower reference limit is 16 million/mL (2021), though many fertility specialists consider 40+ million/mL optimal.',
   },
   // Add more markers here over time
 }

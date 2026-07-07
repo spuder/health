@@ -254,12 +254,14 @@ const BLOOD_MARKERS = {
   // Semen analysis
   semen_volume: { unit: 'mL', range_low: 1.4, range_high: null },
   semen_ph: { unit: '', range_low: 7.2, range_high: null },
-  sperm_progressive_motility: { unit: '%', range_low: 32, range_high: null },
-  total_sperm_motility: { unit: '%', range_low: 40, range_high: null },
-  sperm_morphology: { unit: '%', range_low: 4, range_high: null },
-  sperm_count_per_ml: { unit: 'M/mL', range_low: 15, range_high: null },
-  total_sperm_count: { unit: 'M', range_low: 39, range_high: null },
-  total_progressive_sperm_count: { unit: 'M', range_low: 12.5, range_high: null },
+  sperm_progressive_motility: { unit: '%', range_low: 32, range_high: null, optimal_low: 50, optimal_high: null },
+  sperm_non_progressive_motility: { unit: '%', range_low: null, range_high: null },
+  sperm_non_motile: { unit: '%', range_low: null, range_high: 58 },
+  total_sperm_motility: { unit: '%', range_low: 40, range_high: null, optimal_low: 65, optimal_high: null },
+  sperm_morphology: { unit: '%', range_low: 4, range_high: null, optimal_low: 14, optimal_high: null },
+  sperm_count_per_ml: { unit: 'M/mL', range_low: 15, range_high: null, optimal_low: 100, optimal_high: null },
+  total_sperm_count: { unit: 'M', range_low: 39, range_high: null, optimal_low: 200, optimal_high: null },
+  total_progressive_sperm_count: { unit: 'M', range_low: 12.5, range_high: null, optimal_low: 40, optimal_high: null },
 }
 
 app.get('/api/:userId/blood', requireUser, (req, res) => {
@@ -734,11 +736,11 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
     const userContent = isCsv
       ? [{ type: 'text', text: `Extract all health metrics from this CSV health report and return only the JSON.\n\n${req.file.buffer.toString('utf8')}` }]
       : isPng
-      ? [
+        ? [
           { type: 'image', source: { type: 'base64', media_type: 'image/png', data: req.file.buffer.toString('base64') } },
           { type: 'text', text: 'Extract all health metrics from this health report image and return only the JSON.' },
         ]
-      : [
+        : [
           { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: req.file.buffer.toString('base64') } },
           { type: 'text', text: 'Extract all health metrics from this health report and return only the JSON.' },
         ]

@@ -88,13 +88,25 @@ select option {
 }
 
 @media print {
-  /* Preserve dark theme colors */
+  /* Light mode — don't force-print dark backgrounds */
   * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: economy !important;
+    print-color-adjust: economy !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border-color: #e5e7eb !important;
+    color: #111827 !important;
   }
 
-  /* Hide all UI chrome */
+  body {
+    background: white;
+  }
+
+  /* Restore chart line/fill colors — SVG stroke/fill attrs are separate from CSS `color` */
+  /* (Recharts sets stroke/fill directly on path elements, not via currentColor) */
+
+  /* Hide UI chrome */
   aside,
   .no-print {
     display: none !important;
@@ -119,7 +131,7 @@ select option {
     page-break-inside: avoid;
   }
 
-  /* Add some breathing room between sections */
+  /* Breathing room between sections */
   section + section {
     margin-top: 32px;
   }

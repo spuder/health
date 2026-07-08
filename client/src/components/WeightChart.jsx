@@ -30,12 +30,16 @@ function formatDate(dateStr, days) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function CustomTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null
-  const d = payload[0]?.payload
-  if (!d) return null
-  const entries = payload.filter(p => p.value != null)
-  if (!entries.length) return null
+const EVENT_COLORS = { blood_draw: '#34d399', life_event: '#38bdf8', doctor_visit: '#fbbf24' }
+const EVENT_LABELS = { blood_draw: 'Blood draw', life_event: 'Life event', doctor_visit: 'Doctor visit' }
+
+function CustomTooltip({ active, payload, events = [] }) {
+  if (!active) return null
+  const d = payload?.[0]?.payload
+  if (!d?.date) return null
+  const entries = (payload ?? []).filter(p => p.value != null)
+  const dayEvents = events.filter(e => e.date === d.date)
+  if (!entries.length && !dayEvents.length) return null
   return (
     <div className="bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3 shadow-2xl">
       <p className="text-[#64748b] text-xs mb-2">
@@ -49,6 +53,18 @@ function CustomTooltip({ active, payload }) {
           <span className="text-[#475569] text-xs">{SOURCE_META[p.dataKey]?.label}</span>
         </div>
       ))}
+      {dayEvents.map((ev, i) => {
+        const color = EVENT_COLORS[ev.type] ?? '#94a3b8'
+        return (
+          <div key={i} className={`flex items-start gap-2 text-xs mt-1.5 ${entries.length ? 'pt-1.5 border-t border-[#243450]' : ''}`}>
+            <span className="w-2 h-2 rounded-full flex-shrink-0 mt-0.5" style={{ background: color }} />
+            <div>
+              <span style={{ color }} className="font-medium">{ev.label}</span>
+              <span className="text-[#475569] ml-1.5">{EVENT_LABELS[ev.type] ?? ev.type}</span>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -65,9 +81,14 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
   }, [weightBySource, entries])
 
   const chartData = useMemo(() => {
+    const cutoff = activeDays ? (() => { const c = new Date(); c.setDate(c.getDate() - activeDays); return c })() : null
     const dateSet = new Set()
     for (const [, points] of Object.entries(effectiveBySource)) {
       for (const p of filterByRange(points, activeDays)) dateSet.add(p.date)
+    }
+    // Include event dates so ReferenceLine can render on days without a weight entry
+    for (const ev of events) {
+      if (!cutoff || new Date(ev.date) >= cutoff) dateSet.add(ev.date)
     }
     const dates = [...dateSet].sort()
     return dates.map(date => {
@@ -78,7 +99,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
       }
       return entry
     })
-  }, [effectiveBySource, activeDays])
+  }, [effectiveBySource, activeDays, events])
 
   const activeSources = useMemo(() =>
     Object.keys(effectiveBySource).filter(s => filterByRange(effectiveBySource[s], activeDays).length > 0),
@@ -173,7 +194,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
             tickCount={5}
           />
 
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip events={eventDates} />} filterNull={false} />
 
           {eventDates.map((ev, i) => {
             const stroke = ev.type === 'blood_draw' ? '#34d399'
@@ -199,7 +220,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
               stroke="#a78bfa"
               strokeWidth={2}
               fill="url(#weightGradientAH)"
-              connectNulls={false}
+              connectNulls
               dot={showDots ? { r: 3, fill: '#a78bfa', strokeWidth: 0 } : false}
               activeDot={{ r: 5, fill: '#a78bfa', stroke: '#0d1520', strokeWidth: 2 }}
             />
@@ -215,7 +236,7 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
                 dataKey={source}
                 stroke={color}
                 strokeWidth={2}
-                connectNulls={false}
+                connectNulls
                 dot={{ r: 5, fill: color, stroke: '#0d1520', strokeWidth: 2 }}
                 activeDot={{ r: 7, fill: color, stroke: '#0d1520', strokeWidth: 2 }}
               />

@@ -508,18 +508,26 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         console.log(`[import body_mass] ${data.length} points, units=${units}, sample keys:`, data[0] ? Object.keys(data[0]) : 'none')
       }
 
+      const isSleep = name?.includes('sleep')
+      if (isSleep) console.log(`[sleep] processing name=${name} → mappedName=${metricName} units=${units} points=${data.length}`)
+
       for (const point of data) {
         const date = point.date?.slice(0, 10)
-        if (!date) { stats.skipped++; continue }
+        if (!date) {
+          if (isSleep) console.log(`[sleep] skipped point (no date):`, point)
+          stats.skipped++; continue
+        }
 
         const raw = parseFloat(point.qty ?? point.Avg ?? point.Max ?? point.Min)
         if (isNaN(raw)) {
           if (name === 'body_mass') console.log('[import body_mass] skipped point (no qty/Avg):', point)
+          if (isSleep) console.log(`[sleep] skipped point (no numeric value). date=${date} keys=${Object.keys(point)} point=`, point)
           stats.skipped++; continue
         }
 
         const value = convertUnit(name, raw, units)
         if (name === 'body_mass') console.log(`[import body_mass] storing date=${date} value=${value}`)
+        if (isSleep) console.log(`[sleep] storing date=${date} metric=${metricName} raw=${raw} units=${units} → value=${value}`)
         upsert.run({ date, metric: metricName, value, source: 'apple_health' })
         stats.imported++
       }
@@ -565,6 +573,12 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   try {
     importAll()
     console.log(`[import] ${req.params.userId}: imported=${stats.imported} skipped=${stats.skipped}`)
+
+    // Sleep debug: show what's actually in the DB after import
+    const sleepRows = db.prepare(`SELECT metric, COUNT(*) as count, MAX(date) as latest FROM metrics WHERE metric IN ('sleep_hours','deep_sleep_hours','rem_sleep_hours','sleep_quality') GROUP BY metric`).all()
+    if (sleepRows.length) console.log('[sleep] DB rows after import:', sleepRows)
+    else console.log('[sleep] DB has NO sleep rows at all after import')
+
     res.json({ ok: true, ...stats })
   } catch (e) {
     res.status(500).json({ error: e.message })

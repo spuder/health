@@ -175,16 +175,21 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
 
           <Tooltip content={<CustomTooltip />} />
 
-          {eventDates.map((ev, i) => (
-            <ReferenceLine
-              key={i}
-              x={ev.date}
-              stroke={ev.type === 'blood_draw' ? '#34d399' : '#fbbf24'}
-              strokeDasharray="3 3"
-              strokeWidth={1.5}
-              strokeOpacity={0.6}
-            />
-          ))}
+          {eventDates.map((ev, i) => {
+            const stroke = ev.type === 'blood_draw' ? '#34d399'
+              : ev.type === 'life_event' ? '#38bdf8'
+              : '#fbbf24'
+            return (
+              <ReferenceLine
+                key={i}
+                x={ev.date}
+                stroke={stroke}
+                strokeDasharray="3 3"
+                strokeWidth={1.5}
+                strokeOpacity={0.6}
+              />
+            )
+          })}
 
           {/* Apple Health — area fill + line */}
           {activeSources.includes('apple_health') && (
@@ -237,10 +242,16 @@ export default function WeightChart({ entries = [], weightBySource = {}, events 
               <span className="text-[#475569] text-xs">Blood draw</span>
             </div>
           )}
-          {eventDates.some(e => e.type !== 'blood_draw') && (
+          {eventDates.some(e => e.type === 'doctor_visit') && (
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-px opacity-70" style={{ borderTop: '2px dashed #fbbf24' }} />
               <span className="text-[#475569] text-xs">Doctor visit</span>
+            </div>
+          )}
+          {eventDates.some(e => e.type === 'life_event') && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-px opacity-70" style={{ borderTop: '2px dashed #38bdf8' }} />
+              <span className="text-[#475569] text-xs">Life event</span>
             </div>
           )}
         </div>

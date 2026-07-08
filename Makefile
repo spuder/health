@@ -6,8 +6,9 @@
 default: dev
 
 dev:
+	npm install
 	npm install --prefix client
-	trap 'kill 0' EXIT; node server.js & cd client && npx vite
+	trap 'kill 0' EXIT; [ -f .envrc ] && . .envrc; node server.js & cd client && npx vite
 
 clean:
 	rm -f data/*.db data/*.db-shm data/*.db-wal

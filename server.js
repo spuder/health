@@ -262,6 +262,11 @@ const BLOOD_MARKERS = {
   sperm_count_per_ml: { unit: 'M/mL', range_low: 15, range_high: null, optimal_low: 100, optimal_high: null },
   total_sperm_count: { unit: 'M', range_low: 39, range_high: null, optimal_low: 200, optimal_high: null },
   total_progressive_sperm_count: { unit: 'M', range_low: 12.5, range_high: null, optimal_low: 40, optimal_high: null },
+  // Microplastics
+  microplastics_total: { unit: '', range_low: 6, range_high: 21, optimal_low: 0, optimal_high: 6 },
+  microplastics_30_70_um: { unit: '', range_low: 1, range_high: 4, optimal_low: 0, optimal_high: 1 },
+  microplastics_10_30_um: { unit: '', range_low: 4, range_high: 10, optimal_low: 0, optimal_high: 3 },
+  microplastics_under_10_um: { unit: '', range_low: 4, range_high: 12, optimal_low: 0, optimal_high: 3 },
 }
 
 app.get('/api/:userId/blood', requireUser, (req, res) => {

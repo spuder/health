@@ -53,6 +53,14 @@ const LAB_CATEGORIES = [
       'alt', 'ast', 'ggt', 'alkaline_phosphatase', 'total_bilirubin',
     ],
   },
+  {
+    id: 'microplastics',
+    label: 'Microplastics',
+    color: '#fb923c',
+    keys: [
+      'microplastics_total', 'microplastics_30_70_um', 'microplastics_10_30_um', 'microplastics_under_10_um',
+    ],
+  },
 ]
 
 const ALL_CATEGORIZED = new Set(LAB_CATEGORIES.flatMap(c => c.keys))
@@ -272,7 +280,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
   const dataMin = Math.min(...allVals, ...refVals, ...(allVals.length ? [] : [0]))
   const dataMax = Math.max(...allVals, ...refVals, ...(allVals.length ? [] : [100]))
   const padding = (dataMax - dataMin) * 0.25 || 10
-  const yMin = Math.floor(dataMin - padding)
+  const yMin = Math.max(0, Math.floor(dataMin - padding))
   const yMax = Math.ceil(dataMax + padding)
 
   return (

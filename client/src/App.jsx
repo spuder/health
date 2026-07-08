@@ -10,9 +10,45 @@ import LabsSection from './components/LabsSection'
 import EventsSection from './components/EventsSection'
 import ImportSection from './components/ImportSection'
 import ProtocolsSection from './components/ProtocolsSection'
+import SettingsSection from './components/SettingsSection'
 import ExportModal from './components/ExportModal'
 
 const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'protocols', 'import']
+
+function useHiddenSections(userId) {
+  const storageKey = userId ? `health_hidden_sections_${userId}` : null
+  const [hiddenSections, setHiddenSections] = useState(() => {
+    if (!storageKey) return new Set()
+    try {
+      const stored = localStorage.getItem(storageKey)
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+
+  useEffect(() => {
+    if (!storageKey) return
+    try {
+      const stored = localStorage.getItem(storageKey)
+      setHiddenSections(stored ? new Set(JSON.parse(stored)) : new Set())
+    } catch {
+      setHiddenSections(new Set())
+    }
+  }, [storageKey])
+
+  const toggleSection = useCallback((id) => {
+    setHiddenSections(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      if (storageKey) localStorage.setItem(storageKey, JSON.stringify([...next]))
+      return next
+    })
+  }, [storageKey])
+
+  return { hiddenSections, toggleSection }
+}
 
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16)
@@ -78,9 +114,11 @@ function OnboardingScreen() {
 // ── Main dashboard (user selected) ───────────────────────────
 function Dashboard() {
   const { currentUser, currentUserId } = useUser()
+  const { hiddenSections, toggleSection } = useHiddenSections(currentUserId)
   const [activeSection, setActiveSection] = useState('body')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [printSections, setPrintSections] = useState(null)
   const [bodyData,      setBodyData]      = useState(null)
   const [sleepData,     setSleepData]     = useState(null)
@@ -194,7 +232,7 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0d1520]" style={{ backgroundImage: `radial-gradient(ellipse 120% 60% at 60% 0%, rgba(${hexToRgb(currentUser?.color ?? '#7c3aed')}, 0.18) 0%, transparent 100%), radial-gradient(ellipse 60% 40% at 100% 100%, rgba(${hexToRgb(currentUser?.color ?? '#7c3aed')}, 0.07) 0%, transparent 70%)` }}>
-      <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} hiddenSections={hiddenSections} onOpenSettings={() => setShowSettings(true)} />
 
       {/* Mobile top bar */}
       <div className="no-print md:hidden fixed top-0 left-0 right-0 z-20 h-14 bg-[#111826] border-b border-[#243450] flex items-center px-4 gap-3">
@@ -246,18 +284,36 @@ function Dashboard() {
           </div>
         ) : (
           <>
-            <div className={printSections && !printSections.body      ? 'print-exclude' : ''}><BodySection      data={bodyData}      events={eventsData} userId={currentUserId} onRefresh={loadAll} /></div>
-            <div className={printSections && !printSections.sleep     ? 'print-exclude' : ''}><SleepSection     data={sleepData} /></div>
-            <div className={printSections && !printSections.exercise  ? 'print-exclude' : ''}><ExerciseSection  data={exerciseData}  userId={currentUserId} onRefresh={loadAll} /></div>
-            <div className={printSections && !printSections.heartrate ? 'print-exclude' : ''}><HeartRateSection data={heartrateData} /></div>
-            <div className={printSections && !printSections.labs      ? 'print-exclude' : ''}><LabsSection      data={bloodData}     reports={labReports?.reports ?? []} /></div>
-            <div className={printSections && !printSections.events    ? 'print-exclude' : ''}><EventsSection    data={eventsData}    userId={currentUserId} onRefresh={loadAll} /></div>
-            <div className="print-exclude"><ProtocolsSection data={protocolsData ?? []} userId={currentUserId} onRefresh={loadAll} /></div>
-            <div className="print-exclude"><ImportSection userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} /></div>
+            {!hiddenSections.has('body')      && <div className={printSections && !printSections.body      ? 'print-exclude' : ''}><BodySection      data={bodyData}      events={eventsData} userId={currentUserId} onRefresh={loadAll} /></div>}
+            {!hiddenSections.has('sleep')     && <div className={printSections && !printSections.sleep     ? 'print-exclude' : ''}><SleepSection     data={sleepData} /></div>}
+            {!hiddenSections.has('exercise')  && <div className={printSections && !printSections.exercise  ? 'print-exclude' : ''}><ExerciseSection  data={exerciseData}  userId={currentUserId} onRefresh={loadAll} /></div>}
+            {!hiddenSections.has('heartrate') && <div className={printSections && !printSections.heartrate ? 'print-exclude' : ''}><HeartRateSection data={heartrateData} /></div>}
+            {!hiddenSections.has('labs')      && <div className={printSections && !printSections.labs      ? 'print-exclude' : ''}><LabsSection      data={bloodData}     reports={labReports?.reports ?? []} /></div>}
+            {!hiddenSections.has('events')    && <div className={printSections && !printSections.events    ? 'print-exclude' : ''}><EventsSection    data={eventsData}    userId={currentUserId} onRefresh={loadAll} /></div>}
+            {!hiddenSections.has('protocols') && <div className="print-exclude"><ProtocolsSection data={protocolsData ?? []} userId={currentUserId} onRefresh={loadAll} /></div>}
+            {!hiddenSections.has('import')    && <div className="print-exclude"><ImportSection userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} /></div>}
           </>
         )}
       </main>
       {showExport && <ExportModal onClose={() => setShowExport(false)} onPrint={handlePrint} onExportPng={handleExportPng} />}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowSettings(false)} />
+          <div className="relative bg-[#131d2e] border border-[#243450] rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#243450]">
+              <h2 className="text-white font-semibold text-sm">Settings</h2>
+              <button onClick={() => setShowSettings(false)} className="text-[#475569] hover:text-[#94a3b8] transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5">
+              <SettingsSection hiddenSections={hiddenSections} onToggle={toggleSection} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

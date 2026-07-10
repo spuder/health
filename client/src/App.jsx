@@ -115,7 +115,7 @@ function OnboardingScreen() {
 function Dashboard() {
   const { currentUser, currentUserId } = useUser()
   const { hiddenSections, toggleSection } = useHiddenSections(currentUserId)
-  const [activeSection, setActiveSection] = useState('body')
+  const [activeSection, setActiveSection] = useState(() => sessionStorage.getItem('activeSection') ?? 'body')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -218,6 +218,21 @@ function Dashboard() {
     link.click()
     setPrintSections(null)
   }
+
+  // Persist active section to session storage
+  useEffect(() => {
+    sessionStorage.setItem('activeSection', activeSection)
+  }, [activeSection])
+
+  // After load, scroll back to the section the user was on
+  useEffect(() => {
+    if (!loading) {
+      const saved = sessionStorage.getItem('activeSection')
+      if (saved && saved !== 'body') {
+        document.getElementById(saved)?.scrollIntoView({ behavior: 'instant' })
+      }
+    }
+  }, [loading])
 
   useEffect(() => {
     const observer = new IntersectionObserver(

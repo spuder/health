@@ -17,7 +17,7 @@ const C_CORE  = '#38bdf8'
 const C_TRACK = '#1a2540'
 
 const HISTORY_RANGES = [
-  { label: '10 Days', count: 10 },
+  { label: '14 Days', count: 14 },
   { label: '30 Days', count: 30 },
 ]
 
@@ -136,15 +136,19 @@ function HistoryRing({ entry, selected, onClick }) {
   const label = date
     ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : '—'
+  const isWeekend = date ? (date.getDay() === 0 || date.getDay() === 6) : false
 
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-1.5 focus:outline-none group">
       <div
-        className="rounded-full transition-all duration-200"
-        style={selected
-          ? { boxShadow: `0 0 0 2px ${totalColor(entry?.sleep_hours)}, 0 0 0 4px #131d2e` }
-          : {}
-        }
+        className="rounded-xl transition-all duration-200 p-1"
+        style={{
+          ...(isWeekend ? { background: 'rgba(148,163,184,0.07)' } : {}),
+          boxShadow: [
+            selected ? `0 0 0 2px ${totalColor(entry?.sleep_hours)}, 0 0 0 4px #131d2e` : '',
+            isWeekend ? 'inset 0 0 0 1px rgba(148,163,184,0.1)' : '',
+          ].filter(Boolean).join(', ') || undefined,
+        }}
       >
         <SleepRings entry={entry} size={SIZE} showLabel={false} />
       </div>
@@ -195,7 +199,7 @@ function BedtimeTooltip({ active, payload }) {
 
 export default function SleepSection({ data }) {
   const [showRaw, setShowRaw]           = useState(false)
-  const [historyRange, setHistoryRange] = useState('10 Days')
+  const [historyRange, setHistoryRange] = useState('14 Days')
   const [selectedDate, setSelectedDate] = useState(null)
   const [bedtimeRange, setBedtimeRange] = useState('30D')
 
@@ -336,7 +340,7 @@ export default function SleepSection({ data }) {
               </div>
             </div>
 
-            <div className={`grid gap-x-2 gap-y-4 ${historyCount === 10 ? 'grid-cols-5' : 'grid-cols-6 sm:grid-cols-6'}`}>
+            <div className="grid grid-cols-5 sm:grid-cols-7 gap-x-2 gap-y-4">
               {historyEntries.map(e => (
                 <HistoryRing
                   key={e.date}
@@ -348,11 +352,17 @@ export default function SleepSection({ data }) {
             </div>
 
             {/* Ring legend */}
-            <div className="flex items-center gap-4 mt-5 pt-4 border-t border-[#1e2d45] text-[10px] text-[#475569]">
-              {[['Total', totalColor(7)], ['Deep', C_DEEP], ['REM', C_REM]].map(([l, c]) => (
-                <div key={l} className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
-                  <span>{l}</span>
+            <div className="flex items-center gap-5 mt-5 pt-4 border-t border-[#1e2d45] text-[10px] text-[#475569]">
+              {[
+                { label: 'Total', r: 8, sw: 2.5, color: '#64748b' },
+                { label: 'Deep',  r: 5, sw: 2,   color: C_DEEP },
+                { label: 'REM',   r: 3, sw: 1.5, color: C_REM },
+              ].map(({ label, r, sw, color }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <svg width={20} height={20}>
+                    <circle cx={10} cy={10} r={r} fill="none" stroke={color} strokeWidth={sw} />
+                  </svg>
+                  <span>{label}</span>
                 </div>
               ))}
             </div>

@@ -179,7 +179,7 @@ app.delete('/api/:userId/body/:id', requireUser, (req, res) => {
 // Blood  (metrics: testosterone, triglycerides, + any future markers)
 // ─────────────────────────────────────────────────────────────
 
-const SLEEP_METRICS = ['sleep_hours', 'sleep_quality', 'deep_sleep_hours', 'rem_sleep_hours']
+const SLEEP_METRICS = ['sleep_hours', 'sleep_quality', 'deep_sleep_hours', 'rem_sleep_hours', 'core_sleep_hours', 'awake_hours']
 
 // Ranges calibrated against Rythm Health's Optimal/Average/Out-of-Range classifications.
 // range_low/high = outer boundary (Average zone). optimal_low/high = inner target (Optimal zone).
@@ -499,40 +499,49 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
     }
   }
 
-  const sleepMetricNames = metrics.filter(m => m.name?.includes('sleep')).map(m => ({ name: m.name, units: m.units, count: m.data?.length, sample: m.data?.[0] }))
-  if (sleepMetricNames.length) console.log('[import sleep metrics]', JSON.stringify(sleepMetricNames, null, 2))
-  else console.log('[import] no sleep metrics found in payload. all metric names:', metrics.map(m => m.name))
-
   const importAll = db.transaction(() => {
     for (const { name, units, data = [] } of metrics) {
       const mappedName = name in HAE_METRIC_MAP ? HAE_METRIC_MAP[name] : name
       if (mappedName === null) { stats.skipped += data.length; continue }  // explicitly ignored metric
       const metricName = mappedName
 
-      if (name === 'body_mass') {
-        console.log(`[import body_mass] ${data.length} points, units=${units}, sample keys:`, data[0] ? Object.keys(data[0]) : 'none')
+      // HAE sends sleep_analysis as a compound nightly object (totalSleep/rem/deep/core fields)
+      // rather than a simple qty. Handle it separately, sorting so Apple Watch beats Pillow.
+      if (name === 'sleep_analysis' && data.some(p => 'totalSleep' in p)) {
+        const sorted = [...data].sort((a, b) => (a.source === 'Pillow' ? 0 : 1) - (b.source === 'Pillow' ? 0 : 1))
+        for (const point of sorted) {
+          const date = point.date?.slice(0, 10)
+          if (!date) { stats.skipped++; continue }
+          const src = point.source ?? 'apple_health'
+          const sleepFields = [
+            { field: 'totalSleep', metric: 'sleep_hours' },
+            { field: 'deep',       metric: 'deep_sleep_hours' },
+            { field: 'rem',        metric: 'rem_sleep_hours' },
+            { field: 'core',       metric: 'core_sleep_hours' },
+            { field: 'awake',      metric: 'awake_hours' },
+          ]
+          let stored = 0
+          for (const { field, metric } of sleepFields) {
+            const val = parseFloat(point[field])
+            if (!isNaN(val) && val > 0) {
+              upsert.run({ date, metric, value: Math.round(val * 100) / 100, source: src, notes: null })
+              stored++
+            }
+          }
+          stats.imported += stored
+          if (!stored) stats.skipped++
+        }
+        continue
       }
-
-      const isSleep = name?.includes('sleep')
-      if (isSleep) console.log(`[sleep] processing name=${name} → mappedName=${metricName} units=${units} points=${data.length}`)
 
       for (const point of data) {
         const date = point.date?.slice(0, 10)
-        if (!date) {
-          if (isSleep) console.log(`[sleep] skipped point (no date):`, point)
-          stats.skipped++; continue
-        }
+        if (!date) { stats.skipped++; continue }
 
         const raw = parseFloat(point.qty ?? point.Avg ?? point.Max ?? point.Min)
-        if (isNaN(raw)) {
-          if (name === 'body_mass') console.log('[import body_mass] skipped point (no qty/Avg):', point)
-          if (isSleep) console.log(`[sleep] skipped point (no numeric value). date=${date} keys=${Object.keys(point)} point=`, point)
-          stats.skipped++; continue
-        }
+        if (isNaN(raw)) { stats.skipped++; continue }
 
         const value = convertUnit(name, raw, units)
-        if (name === 'body_mass') console.log(`[import body_mass] storing date=${date} value=${value}`)
-        if (isSleep) console.log(`[sleep] storing date=${date} metric=${metricName} raw=${raw} units=${units} → value=${value}`)
         upsert.run({ date, metric: metricName, value, source: 'apple_health' })
         stats.imported++
       }
@@ -577,13 +586,6 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
 
   try {
     importAll()
-    console.log(`[import] ${req.params.userId}: imported=${stats.imported} skipped=${stats.skipped}`)
-
-    // Sleep debug: show what's actually in the DB after import
-    const sleepRows = db.prepare(`SELECT metric, COUNT(*) as count, MAX(date) as latest FROM metrics WHERE metric IN ('sleep_hours','deep_sleep_hours','rem_sleep_hours','sleep_quality') GROUP BY metric`).all()
-    if (sleepRows.length) console.log('[sleep] DB rows after import:', sleepRows)
-    else console.log('[sleep] DB has NO sleep rows at all after import')
-
     res.json({ ok: true, ...stats })
   } catch (e) {
     res.status(500).json({ error: e.message })

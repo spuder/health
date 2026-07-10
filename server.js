@@ -520,6 +520,9 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         for (const point of sorted) {
           const date = point.date?.slice(0, 10)
           if (!date) { stats.skipped++; continue }
+          // Skip naps — only process sessions starting between 7 PM and 2 AM
+          const startH = parseTimeToHours(point.sleepStart)
+          if (!isNaN(startH) && startH >= 2 && startH < 19) { stats.skipped++; continue }
           const src = point.source ?? 'apple_health'
           const sleepFields = [
             { field: 'totalSleep',  metric: 'sleep_hours' },

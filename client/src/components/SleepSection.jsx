@@ -137,6 +137,20 @@ function HistoryRing({ entry, selected, onClick }) {
     ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : '—'
   const isWeekend = date ? (date.getDay() === 0 || date.getDay() === 6) : false
+  const isPlaceholder = entry?.isPlaceholder
+
+  if (isPlaceholder) {
+    return (
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="p-1">
+          <svg width={SIZE} height={SIZE}>
+            <circle cx={SIZE/2} cy={SIZE/2} r={SIZE/2 - 6} fill="none" stroke="#1e2d45" strokeWidth={1.5} strokeDasharray="4 3" />
+          </svg>
+        </div>
+        <span className="text-[10px] text-[#374d6c]">Today</span>
+      </div>
+    )
+  }
 
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-1.5 focus:outline-none group">
@@ -211,8 +225,16 @@ export default function SleepSection({ data }) {
     selectedDate ? withHours.find(e => e.date === selectedDate) ?? latest : latest
   , [selectedDate, withHours, latest])
 
-  const historyCount   = HISTORY_RANGES.find(r => r.label === historyRange)?.count ?? 10
-  const historyEntries = useMemo(() => withHours.slice(-historyCount).reverse(), [withHours, historyCount])
+  const historyCount   = HISTORY_RANGES.find(r => r.label === historyRange)?.count ?? 14
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const historyEntries = useMemo(() => {
+    const recent = withHours.slice(-historyCount).reverse()
+    // Always show a placeholder for today if no data yet
+    if (recent[0]?.date !== todayStr) {
+      recent.unshift({ date: todayStr, isPlaceholder: true })
+    }
+    return recent
+  }, [withHours, historyCount, todayStr])
 
   const bedtimeDays = BEDTIME_RANGES.find(r => r.label === bedtimeRange)?.days ?? 30
   const bedtimeData = useMemo(() => {

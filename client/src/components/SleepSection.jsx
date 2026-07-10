@@ -22,7 +22,7 @@ const HISTORY_RANGES = [
 ]
 
 const BEDTIME_RANGES = [
-  { label: '7D',  days: 7   },
+  { label: '14D', days: 14  },
   { label: '30D', days: 30  },
   { label: '1Y',  days: 365 },
 ]
@@ -201,7 +201,7 @@ export default function SleepSection({ data }) {
   const [showRaw, setShowRaw]           = useState(false)
   const [historyRange, setHistoryRange] = useState('14 Days')
   const [selectedDate, setSelectedDate] = useState(null)
-  const [bedtimeRange, setBedtimeRange] = useState('30D')
+  const [bedtimeRange, setBedtimeRange] = useState('14D')
 
   const entries   = data?.entries ?? []
   const withHours = entries.filter(e => e.sleep_hours != null)

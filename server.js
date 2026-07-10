@@ -179,7 +179,15 @@ app.delete('/api/:userId/body/:id', requireUser, (req, res) => {
 // Blood  (metrics: testosterone, triglycerides, + any future markers)
 // ─────────────────────────────────────────────────────────────
 
-const SLEEP_METRICS = ['sleep_hours', 'sleep_quality', 'deep_sleep_hours', 'rem_sleep_hours', 'core_sleep_hours', 'awake_hours']
+const SLEEP_METRICS = ['sleep_hours', 'sleep_quality', 'deep_sleep_hours', 'rem_sleep_hours', 'core_sleep_hours', 'awake_hours', 'bedtime', 'wake_time']
+
+// Parse "2026-07-08 23:10:31 -0600" → decimal hours (23.175)
+function parseTimeToHours(str) {
+  if (!str || typeof str !== 'string') return NaN
+  const m = str.match(/(\d{2}):(\d{2}):(\d{2})/)
+  if (!m) return NaN
+  return parseInt(m[1]) + parseInt(m[2]) / 60 + parseInt(m[3]) / 3600
+}
 
 // Ranges calibrated against Rythm Health's Optimal/Average/Out-of-Range classifications.
 // range_low/high = outer boundary (Average zone). optimal_low/high = inner target (Optimal zone).
@@ -514,16 +522,18 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           if (!date) { stats.skipped++; continue }
           const src = point.source ?? 'apple_health'
           const sleepFields = [
-            { field: 'totalSleep', metric: 'sleep_hours' },
-            { field: 'deep',       metric: 'deep_sleep_hours' },
-            { field: 'rem',        metric: 'rem_sleep_hours' },
-            { field: 'core',       metric: 'core_sleep_hours' },
-            { field: 'awake',      metric: 'awake_hours' },
+            { field: 'totalSleep',  metric: 'sleep_hours' },
+            { field: 'deep',        metric: 'deep_sleep_hours' },
+            { field: 'rem',         metric: 'rem_sleep_hours' },
+            { field: 'core',        metric: 'core_sleep_hours' },
+            { field: 'awake',       metric: 'awake_hours' },
+            { field: 'sleepStart',  metric: 'bedtime',    parse: parseTimeToHours },
+            { field: 'sleepEnd',    metric: 'wake_time',  parse: parseTimeToHours },
           ]
           let stored = 0
-          for (const { field, metric } of sleepFields) {
-            const val = parseFloat(point[field])
-            if (!isNaN(val) && val > 0) {
+          for (const { field, metric, parse } of sleepFields) {
+            const val = parse ? parse(point[field]) : parseFloat(point[field])
+            if (!isNaN(val) && (parse ? true : val > 0)) {
               upsert.run({ date, metric, value: Math.round(val * 100) / 100, source: src, notes: null })
               stored++
             }

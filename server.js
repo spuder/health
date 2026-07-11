@@ -522,16 +522,17 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           if (!date) { stats.skipped++; continue }
           // Skip naps — only process sessions starting between 7 PM and 2 AM
           const startH = parseTimeToHours(point.sleepStart)
+          console.log('[sleep session]', date, 'src:', point.source, 'sleepStart raw:', point.sleepStart, '→ h:', startH, isNaN(startH) ? '' : (startH >= 2 && startH < 19 ? '(NAP→skip)' : '(night→keep)'))
           if (!isNaN(startH) && startH >= 2 && startH < 19) { stats.skipped++; continue }
           const src = point.source ?? 'apple_health'
           const sleepFields = [
-            { field: 'totalSleep',  metric: 'sleep_hours' },
-            { field: 'deep',        metric: 'deep_sleep_hours' },
-            { field: 'rem',         metric: 'rem_sleep_hours' },
-            { field: 'core',        metric: 'core_sleep_hours' },
-            { field: 'awake',       metric: 'awake_hours' },
-            { field: 'sleepStart',  metric: 'bedtime',    parse: parseTimeToHours },
-            { field: 'sleepEnd',    metric: 'wake_time',  parse: parseTimeToHours },
+            { field: 'totalSleep', metric: 'sleep_hours' },
+            { field: 'deep', metric: 'deep_sleep_hours' },
+            { field: 'rem', metric: 'rem_sleep_hours' },
+            { field: 'core', metric: 'core_sleep_hours' },
+            { field: 'awake', metric: 'awake_hours' },
+            { field: 'sleepStart', metric: 'bedtime', parse: parseTimeToHours },
+            { field: 'sleepEnd', metric: 'wake_time', parse: parseTimeToHours },
           ]
           let stored = 0
           for (const { field, metric, parse } of sleepFields) {

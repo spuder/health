@@ -226,15 +226,17 @@ export default function SleepSection({ data }) {
   , [selectedDate, withHours, latest])
 
   const historyCount   = HISTORY_RANGES.find(r => r.label === historyRange)?.count ?? 14
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const currentHour = now.getHours()
   const historyEntries = useMemo(() => {
     const recent = withHours.slice(-historyCount).reverse()
-    // Always show a placeholder for today if no data yet
-    if (recent[0]?.date !== todayStr) {
+    // Only show placeholder in the morning (midnight–noon) — before midnight you haven't slept yet
+    if (recent[0]?.date !== todayStr && currentHour < 12) {
       recent.unshift({ date: todayStr, isPlaceholder: true })
     }
     return recent
-  }, [withHours, historyCount, todayStr])
+  }, [withHours, historyCount, todayStr, currentHour])
 
   const bedtimeDays = BEDTIME_RANGES.find(r => r.label === bedtimeRange)?.days ?? 30
   const bedtimeData = useMemo(() => {

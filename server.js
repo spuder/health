@@ -344,7 +344,7 @@ app.get('/api/:userId/sleep', requireUser, (req, res) => {
   const rows = db.prepare(`
     SELECT id, date, metric, value, source, notes, created_at
     FROM metrics
-    WHERE metric IN (${placeholders})
+    WHERE metric IN (${placeholders}) AND source NOT LIKE '%pillow%'
     ORDER BY date ASC, id ASC
   `).all(...SLEEP_METRICS)
 
@@ -514,10 +514,11 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       const metricName = mappedName
 
       // HAE sends sleep_analysis as a compound nightly object (totalSleep/rem/deep/core fields)
-      // rather than a simple qty. Handle it separately, sorting so Apple Watch beats Pillow.
+      // rather than a simple qty. Handle it separately.
       if (name === 'sleep_analysis' && data.some(p => 'totalSleep' in p)) {
-        const sorted = [...data].sort((a, b) => (a.source === 'Pillow' ? 0 : 1) - (b.source === 'Pillow' ? 0 : 1))
-        for (const point of sorted) {
+        for (const point of data) {
+          // Pillow's sleep staging disagrees with the watch too often — ignore it entirely
+          if ((point.source || '').toLowerCase().includes('pillow')) { stats.skipped++; continue }
           const date = point.date?.slice(0, 10)
           if (!date) { stats.skipped++; continue }
           // Skip naps — only process sessions starting between 7 PM and 2 AM

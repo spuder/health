@@ -147,7 +147,7 @@ function HistoryRing({ entry, selected, onClick }) {
             <circle cx={SIZE/2} cy={SIZE/2} r={SIZE/2 - 6} fill="none" stroke="#1e2d45" strokeWidth={1.5} strokeDasharray="4 3" />
           </svg>
         </div>
-        <span className="text-[10px] text-[#374d6c]">Today</span>
+        <span className="text-[10px] text-[#374d6c]">{label}</span>
       </div>
     )
   }
@@ -230,12 +230,24 @@ export default function SleepSection({ data }) {
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const currentHour = now.getHours()
   const historyEntries = useMemo(() => {
-    const recent = withHours.slice(-historyCount).reverse()
-    // Only show placeholder in the morning (midnight–noon) — before midnight you haven't slept yet
-    if (recent[0]?.date !== todayStr && currentHour < 12) {
-      recent.unshift({ date: todayStr, isPlaceholder: true })
+    const byDate = new Map(withHours.map(e => [e.date, e]))
+    const earliest = withHours[0]?.date
+    const base = new Date(todayStr + 'T00:00:00')
+    const days = []
+    for (let i = 0; i < historyCount; i++) {
+      const d = new Date(base)
+      d.setDate(d.getDate() - i)
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      if (earliest && dateStr < earliest) break  // don't show gaps before history began
+      if (byDate.has(dateStr)) {
+        days.push(byDate.get(dateStr))
+      } else if (dateStr === todayStr && currentHour >= 12) {
+        continue  // today, but too early in the evening to expect data yet — skip, don't flag as missing
+      } else {
+        days.push({ date: dateStr, isPlaceholder: true })
+      }
     }
-    return recent
+    return days
   }, [withHours, historyCount, todayStr, currentHour])
 
   const bedtimeDays = BEDTIME_RANGES.find(r => r.label === bedtimeRange)?.days ?? 30

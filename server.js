@@ -481,6 +481,9 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   const metrics = req.body?.data?.metrics ?? []
   const bodyMass = metrics.find(m => m.name === 'body_mass')
   if (bodyMass) console.log('[import body_mass]', bodyMass.units, 'sample:', bodyMass.data?.[0])
+  const sleepMetric = metrics.find(m => m.name === 'sleep_analysis')
+  console.log(new Date().toISOString(), '[import received]', metrics.length, 'metrics; sleep_analysis points:',
+    sleepMetric?.data?.length ?? 0, '; dates:', sleepMetric?.data?.map(p => p.date?.slice(0, 10)).join(','))
   const stats = { imported: 0, skipped: 0 }
 
   const upsert = db.prepare(`
@@ -517,13 +520,23 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       // rather than a simple qty. Handle it separately.
       if (name === 'sleep_analysis' && data.some(p => 'totalSleep' in p)) {
         for (const point of data) {
+          const startH = parseTimeToHours(point.sleepStart)
+          const isPillowPoint = (point.source || '').toLowerCase().includes('pillow')
+          console.log(new Date().toISOString(), '[sleep point]', JSON.stringify({
+            source: point.source,
+            date: point.date,
+            sleepStart: point.sleepStart,
+            sleepEnd: point.sleepEnd,
+            parsedStartHour: startH,
+            verdict: isPillowPoint ? 'PILLOW→skip'
+              : isNaN(startH) ? 'unparseable→skip'
+              : (startH >= 2 && startH < 19 ? 'NAP→skip' : 'night→keep'),
+          }))
           // Pillow's sleep staging disagrees with the watch too often — ignore it entirely
-          if ((point.source || '').toLowerCase().includes('pillow')) { stats.skipped++; continue }
+          if (isPillowPoint) { stats.skipped++; continue }
           const date = point.date?.slice(0, 10)
           if (!date) { stats.skipped++; continue }
           // Skip naps — only process sessions starting between 7 PM and 2 AM
-          const startH = parseTimeToHours(point.sleepStart)
-          console.log('[sleep session]', date, 'src:', point.source, 'sleepStart raw:', point.sleepStart, '→ h:', startH, isNaN(startH) ? '' : (startH >= 2 && startH < 19 ? '(NAP→skip)' : '(night→keep)'))
           if (!isNaN(startH) && startH >= 2 && startH < 19) { stats.skipped++; continue }
           const src = point.source ?? 'apple_health'
           const sleepFields = [

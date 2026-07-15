@@ -256,6 +256,11 @@ export default function SleepSection({ data }) {
     return days
   }, [withHours, historyCount, todayStr, currentHour])
 
+  // Fixed 3-hour scale: 9 PM (toChart(21)=1) to 12 AM (toChart(0)=4) — bedtimes after
+  // midnight are clamped to the 12 AM line rather than stretching the axis for one outlier.
+  const BT_MIN = 1    // 9 PM
+  const BT_MAX = toChart(0)  // 12 AM
+
   const bedtimeDays = BEDTIME_RANGES.find(r => r.label === bedtimeRange)?.days ?? 30
   const bedtimeData = useMemo(() => {
     const cutoff = new Date()
@@ -263,13 +268,9 @@ export default function SleepSection({ data }) {
     const cutoffStr = cutoff.toISOString().slice(0, 10)
     return withHours
       .filter(e => e.date >= cutoffStr && e.bedtime != null)
-      .map(e => ({ date: e.date, bedtime: toChart(e.bedtime), bedtime_raw: e.bedtime }))
+      .map(e => ({ date: e.date, bedtime: Math.min(toChart(e.bedtime), BT_MAX), bedtime_raw: e.bedtime }))
       .reverse()
-  }, [withHours, bedtimeDays])
-
-  // Fixed scale: 9 PM (toChart(21)=1) to 1 AM (toChart(1)=5)
-  const BT_MIN = 1    // 9 PM
-  const BT_MAX = 5    // 1 AM
+  }, [withHours, bedtimeDays, BT_MAX])
 
   return (
     <section id="sleep" className="mb-16">
@@ -445,7 +446,7 @@ export default function SleepSection({ data }) {
                   />
                   <YAxis
                     domain={[BT_MIN, BT_MAX]}
-                    ticks={[toChart(21), toChart(22), toChart(23), toChart(0), toChart(1)]}
+                    ticks={[toChart(21), toChart(22), toChart(23), toChart(0)]}
                     tick={{ fill: '#475569', fontSize: 10 }}
                     axisLine={false} tickLine={false}
                     tickFormatter={chartToLabel}

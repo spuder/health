@@ -344,7 +344,7 @@ app.get('/api/:userId/sleep', requireUser, (req, res) => {
   const rows = db.prepare(`
     SELECT id, date, metric, value, source, notes, created_at
     FROM metrics
-    WHERE metric IN (${placeholders}) AND source NOT LIKE '%pillow%'
+    WHERE metric IN (${placeholders})
     ORDER BY date ASC, id ASC
   `).all(...SLEEP_METRICS)
 
@@ -482,8 +482,9 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   const bodyMass = metrics.find(m => m.name === 'body_mass')
   if (bodyMass) console.log('[import body_mass]', bodyMass.units, 'sample:', bodyMass.data?.[0])
   const sleepMetric = metrics.find(m => m.name === 'sleep_analysis')
-  console.log(new Date().toISOString(), '[import received]', metrics.length, 'metrics; sleep_analysis points:',
-    sleepMetric?.data?.length ?? 0, '; dates:', sleepMetric?.data?.map(p => p.date?.slice(0, 10)).join(','))
+  if (sleepMetric?.data?.length) {
+    console.log(new Date().toISOString(), '[import received]', metrics.length, 'metrics; sleep_analysis points:', sleepMetric.data.length)
+  }
   const stats = { imported: 0, skipped: 0 }
 
   const upsert = db.prepare(`
@@ -516,24 +517,104 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       if (mappedName === null) { stats.skipped += data.length; continue }  // explicitly ignored metric
       const metricName = mappedName
 
+      // With "Summarize Data" off, HAE sends sleep_analysis as raw per-stage intervals
+      // (one row per Awake/Core/Deep/REM/Asleep/In Bed segment, per source) instead of a
+      // single nightly summary. Each interval's own `date` field is just its literal
+      // calendar day, NOT a "which night" grouping — a session starting just after
+      // midnight and another starting that same evening can both land on the same
+      // calendar date, so grouping by date alone merges two different nights together.
+      // Instead, cluster intervals per source by time proximity (a multi-hour gap means
+      // a new session), then file each cluster under a night the same way the old
+      // nap-filter did: late-evening starts belong to the next calendar day.
+      if (name === 'sleep_analysis' && data.some(p => 'value' in p && 'qty' in p && 'start' in p)) {
+        const SESSION_GAP_HOURS = 4
+        const bySource = new Map()
+        for (const point of data) {
+          if (!point.start || !point.end || isNaN(parseFloat(point.qty))) { stats.skipped++; continue }
+          const src = point.source || 'apple_health'
+          if (!bySource.has(src)) bySource.set(src, [])
+          bySource.get(src).push(point)
+        }
+
+        const storeCluster = (src, cluster) => {
+          const start = cluster[0].start
+          const startH = parseTimeToHours(start)
+          let end = cluster[0].end
+          const totals = { awake: 0, core: 0, deep: 0, rem: 0, asleep: 0 }
+          for (const p of cluster) {
+            const qty = parseFloat(p.qty)
+            const stage = (p.value || '').toLowerCase()
+            if (stage in totals) totals[stage] += qty
+            if (new Date(p.end) > new Date(end)) end = p.end
+          }
+
+          let ownerDate = null
+          if (!isNaN(startH) && startH >= 19) {
+            const d = new Date(start.slice(0, 10) + 'T00:00:00')
+            d.setDate(d.getDate() + 1)
+            ownerDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          } else if (!isNaN(startH) && startH < 2) {
+            ownerDate = start.slice(0, 10)
+          }
+
+          console.log(new Date().toISOString(), '[sleep night]', JSON.stringify({
+            ownerDate, source: src, start, end, startH, intervals: cluster.length, ...totals,
+            verdict: ownerDate ? 'night→keep' : 'NAP/unparseable→skip',
+          }))
+          if (!ownerDate) { stats.skipped += cluster.length; return }
+
+          const sleepFields = [
+            ['sleep_hours', totals.core + totals.deep + totals.rem + totals.asleep],
+            ['deep_sleep_hours', totals.deep],
+            ['rem_sleep_hours', totals.rem],
+            ['core_sleep_hours', totals.core],
+            ['awake_hours', totals.awake],
+            ['bedtime', startH],
+            ['wake_time', parseTimeToHours(end)],
+          ]
+          let stored = 0
+          for (const [metric, value] of sleepFields) {
+            if (value != null && !isNaN(value) && value > 0) {
+              upsert.run({ date: ownerDate, metric, value: Math.round(value * 100) / 100, source: src, notes: null })
+              stored++
+            }
+          }
+          stats.imported += stored
+          if (!stored) stats.skipped++
+        }
+
+        for (const [src, points] of bySource) {
+          points.sort((a, b) => new Date(a.start) - new Date(b.start))
+          let cluster = []
+          let clusterMaxEnd = null
+          for (const point of points) {
+            if (cluster.length && (new Date(point.start) - clusterMaxEnd) / 3600000 > SESSION_GAP_HOURS) {
+              storeCluster(src, cluster)
+              cluster = []
+              clusterMaxEnd = null
+            }
+            cluster.push(point)
+            const end = new Date(point.end)
+            if (!clusterMaxEnd || end > clusterMaxEnd) clusterMaxEnd = end
+          }
+          if (cluster.length) storeCluster(src, cluster)
+        }
+        continue
+      }
+
       // HAE sends sleep_analysis as a compound nightly object (totalSleep/rem/deep/core fields)
-      // rather than a simple qty. Handle it separately.
+      // rather than a simple qty, when "Summarize Data" is on. Handle it separately.
       if (name === 'sleep_analysis' && data.some(p => 'totalSleep' in p)) {
         for (const point of data) {
           const startH = parseTimeToHours(point.sleepStart)
-          const isPillowPoint = (point.source || '').toLowerCase().includes('pillow')
           console.log(new Date().toISOString(), '[sleep point]', JSON.stringify({
             source: point.source,
             date: point.date,
             sleepStart: point.sleepStart,
             sleepEnd: point.sleepEnd,
             parsedStartHour: startH,
-            verdict: isPillowPoint ? 'PILLOW→skip'
-              : isNaN(startH) ? 'unparseable→skip'
-              : (startH >= 2 && startH < 19 ? 'NAP→skip' : 'night→keep'),
+            verdict: isNaN(startH) ? 'unparseable→skip' : (startH >= 2 && startH < 19 ? 'NAP→skip' : 'night→keep'),
           }))
-          // Pillow's sleep staging disagrees with the watch too often — ignore it entirely
-          if (isPillowPoint) { stats.skipped++; continue }
           const date = point.date?.slice(0, 10)
           if (!date) { stats.skipped++; continue }
           // Skip naps — only process sessions starting between 7 PM and 2 AM

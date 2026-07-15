@@ -85,7 +85,7 @@ function Ring({ cx, cy, r, width, progress, color, trackColor = C_TRACK }) {
   )
 }
 
-function SleepRings({ entry, size = 220, showLabel = true }) {
+function SleepRings({ entry, size = 220, showLabel = true, responsive = false }) {
   const cx = size / 2
   const cy = size / 2
   const rw  = Math.max(3, Math.round(size * 0.088))
@@ -106,7 +106,13 @@ function SleepRings({ entry, size = 220, showLabel = true }) {
   const m = Math.round((total - h) * 60)
 
   return (
-    <svg width={size} height={size} style={{ overflow: 'visible', display: 'block' }}>
+    <svg
+      width={responsive ? undefined : size}
+      height={responsive ? undefined : size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={responsive ? 'w-full h-full' : undefined}
+      style={{ overflow: 'visible', display: 'block' }}
+    >
       <Ring cx={cx} cy={cy} r={r1} width={rw} progress={total / TOTAL_GOAL} color={totalColor(total)} />
       <Ring cx={cx} cy={cy} r={r2} width={rw} progress={deep / DEEP_GOAL}  color={C_DEEP} />
       <Ring cx={cx} cy={cy} r={r3} width={rw} progress={rem  / REM_GOAL}   color={C_REM} />
@@ -142,8 +148,8 @@ function HistoryRing({ entry, selected, onClick }) {
   if (isPlaceholder) {
     return (
       <div className="flex flex-col items-center gap-1.5">
-        <div className="p-1">
-          <svg width={SIZE} height={SIZE}>
+        <div className="w-full aspect-square max-w-16 p-1">
+          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-full">
             <circle cx={SIZE/2} cy={SIZE/2} r={SIZE/2 - 6} fill="none" stroke="#1e2d45" strokeWidth={1.5} strokeDasharray="4 3" />
           </svg>
         </div>
@@ -153,9 +159,9 @@ function HistoryRing({ entry, selected, onClick }) {
   }
 
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 focus:outline-none group">
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 focus:outline-none group w-full">
       <div
-        className="rounded-xl transition-all duration-200 p-1"
+        className="w-full aspect-square max-w-16 rounded-xl transition-all duration-200 p-1"
         style={{
           ...(isWeekend ? { background: 'rgba(148,163,184,0.07)' } : {}),
           boxShadow: [
@@ -164,7 +170,7 @@ function HistoryRing({ entry, selected, onClick }) {
           ].filter(Boolean).join(', ') || undefined,
         }}
       >
-        <SleepRings entry={entry} size={SIZE} showLabel={false} />
+        <SleepRings entry={entry} size={SIZE} showLabel={false} responsive />
       </div>
       <span className={`text-[10px] tabular-nums transition-colors ${selected ? 'text-white' : 'text-[#374d6c] group-hover:text-[#475569]'}`}>
         {label}

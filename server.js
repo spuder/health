@@ -348,7 +348,26 @@ app.get('/api/:userId/sleep', requireUser, (req, res) => {
     ORDER BY date ASC, id ASC
   `).all(...SLEEP_METRICS)
 
-  res.json({ entries: pivotMetrics(rows) })
+  const entries = pivotMetrics(rows)
+
+  // Multiple sources (e.g. Apple Watch + Pillow) each log their own bedtime/wake_time
+  // for the same night. pivotMetrics keeps whichever source's row synced most recently,
+  // which flip-flops on every re-sync. Override with the earliest-recorded bedtime and
+  // latest-recorded wake_time across all of that night's sources instead.
+  const normBedtime = v => v < 12 ? v + 24 : v
+  const byDate = {}
+  for (const entry of entries) byDate[entry.date] = entry
+  for (const row of rows) {
+    const entry = byDate[row.date]
+    if (row.metric === 'bedtime' && (entry.bedtime == null || normBedtime(row.value) < normBedtime(entry.bedtime))) {
+      entry.bedtime = row.value
+    }
+    if (row.metric === 'wake_time' && (entry.wake_time == null || row.value > entry.wake_time)) {
+      entry.wake_time = row.value
+    }
+  }
+
+  res.json({ entries })
 })
 
 app.post('/api/:userId/sleep', requireUser, (req, res) => {

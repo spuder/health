@@ -115,7 +115,7 @@ function OnboardingScreen() {
 function Dashboard() {
   const { currentUser, currentUserId } = useUser()
   const { hiddenSections, toggleSection } = useHiddenSections(currentUserId)
-  const [activeSection, setActiveSection] = useState(() => sessionStorage.getItem('activeSection') ?? 'body')
+  const [activeSection, setActiveSection] = useState(() => localStorage.getItem('activeSection') ?? 'body')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showExport, setShowExport] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -219,15 +219,16 @@ function Dashboard() {
     setPrintSections(null)
   }
 
-  // Persist active section to session storage
+  // Persist active section to local storage (not sessionStorage — mobile Safari can
+  // clear that between launches, e.g. reopening from a home-screen icon)
   useEffect(() => {
-    sessionStorage.setItem('activeSection', activeSection)
+    localStorage.setItem('activeSection', activeSection)
   }, [activeSection])
 
   // After load, scroll back to the section the user was on
   useEffect(() => {
     if (!loading) {
-      const saved = sessionStorage.getItem('activeSection')
+      const saved = localStorage.getItem('activeSection')
       if (saved && saved !== 'body') {
         document.getElementById(saved)?.scrollIntoView({ behavior: 'instant' })
       }

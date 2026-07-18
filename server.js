@@ -536,7 +536,13 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           bySource.get(src).push(point)
         }
 
-        const storeCluster = (src, cluster) => {
+        // Clusters are accumulated per (source, ownerDate) rather than written immediately,
+        // so a night that a wake disturbance splits into two clusters (e.g. asleep 9:52 PM,
+        // briefly up, asleep again 1:12 AM) gets its stage totals summed together instead of
+        // the second cluster's upsert silently overwriting the first.
+        const byNight = new Map()
+
+        const addCluster = (src, cluster) => {
           const start = cluster[0].start
           const startH = parseTimeToHours(start)
           let end = cluster[0].end
@@ -563,24 +569,18 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           }))
           if (!ownerDate) { stats.skipped += cluster.length; return }
 
-          const sleepFields = [
-            ['sleep_hours', totals.core + totals.deep + totals.rem + totals.asleep],
-            ['deep_sleep_hours', totals.deep],
-            ['rem_sleep_hours', totals.rem],
-            ['core_sleep_hours', totals.core],
-            ['awake_hours', totals.awake],
-            ['bedtime', startH],
-            ['wake_time', parseTimeToHours(end)],
-          ]
-          let stored = 0
-          for (const [metric, value] of sleepFields) {
-            if (value != null && !isNaN(value) && value > 0) {
-              upsert.run({ date: ownerDate, metric, value: Math.round(value * 100) / 100, source: src, notes: null })
-              stored++
-            }
+          const key = `${src}|${ownerDate}`
+          if (!byNight.has(key)) {
+            byNight.set(key, { src, ownerDate, start, end, awake: 0, core: 0, deep: 0, rem: 0, asleep: 0 })
           }
-          stats.imported += stored
-          if (!stored) stats.skipped++
+          const night = byNight.get(key)
+          night.awake += totals.awake
+          night.core += totals.core
+          night.deep += totals.deep
+          night.rem += totals.rem
+          night.asleep += totals.asleep
+          if (new Date(start) < new Date(night.start)) night.start = start
+          if (new Date(end) > new Date(night.end)) night.end = end
         }
 
         for (const [src, points] of bySource) {
@@ -589,7 +589,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           let clusterMaxEnd = null
           for (const point of points) {
             if (cluster.length && (new Date(point.start) - clusterMaxEnd) / 3600000 > SESSION_GAP_HOURS) {
-              storeCluster(src, cluster)
+              addCluster(src, cluster)
               cluster = []
               clusterMaxEnd = null
             }
@@ -597,7 +597,28 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
             const end = new Date(point.end)
             if (!clusterMaxEnd || end > clusterMaxEnd) clusterMaxEnd = end
           }
-          if (cluster.length) storeCluster(src, cluster)
+          if (cluster.length) addCluster(src, cluster)
+        }
+
+        for (const night of byNight.values()) {
+          const sleepFields = [
+            ['sleep_hours', night.core + night.deep + night.rem + night.asleep],
+            ['deep_sleep_hours', night.deep],
+            ['rem_sleep_hours', night.rem],
+            ['core_sleep_hours', night.core],
+            ['awake_hours', night.awake],
+            ['bedtime', parseTimeToHours(night.start)],
+            ['wake_time', parseTimeToHours(night.end)],
+          ]
+          let stored = 0
+          for (const [metric, value] of sleepFields) {
+            if (value != null && !isNaN(value) && value > 0) {
+              upsert.run({ date: night.ownerDate, metric, value: Math.round(value * 100) / 100, source: night.src, notes: null })
+              stored++
+            }
+          }
+          stats.imported += stored
+          if (!stored) stats.skipped++
         }
         continue
       }

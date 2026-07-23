@@ -246,8 +246,28 @@ function Dashboard() {
     return () => observer.disconnect()
   }, [loading])
 
+  const accentColor = currentUser?.color ?? '#7c3aed'
+  const accentRgb = hexToRgb(accentColor)
+
   return (
-    <div className="min-h-screen bg-[#0d1520]" style={{ backgroundImage: `radial-gradient(ellipse 120% 60% at 60% 0%, rgba(${hexToRgb(currentUser?.color ?? '#7c3aed')}, 0.18) 0%, transparent 100%), radial-gradient(ellipse 60% 40% at 100% 100%, rgba(${hexToRgb(currentUser?.color ?? '#7c3aed')}, 0.07) 0%, transparent 70%)` }}>
+    <div className="min-h-screen bg-[#0d1520]">
+      {/* Ambient accent glow — fixed to the viewport so it stays visible while scrolling */}
+      <div
+        className="no-print fixed inset-0 -z-10 pointer-events-none"
+        style={{
+          background: [
+            `linear-gradient(180deg, rgba(${accentRgb}, 0.16) 0%, rgba(${accentRgb}, 0.05) 220px, transparent 480px)`,
+            `radial-gradient(ellipse 120% 60% at 70% 0%, rgba(${accentRgb}, 0.22) 0%, transparent 60%)`,
+            `radial-gradient(ellipse 70% 50% at 100% 100%, rgba(${accentRgb}, 0.12) 0%, transparent 70%)`,
+          ].join(', '),
+        }}
+      />
+      {/* Accent top bar */}
+      <div
+        className="no-print fixed top-0 left-0 right-0 h-[5px] z-[100]"
+        style={{ background: accentColor, boxShadow: `0 0 24px 0 ${accentColor}` }}
+      />
+
       <Sidebar active={activeSection} onNav={handleNav} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} hiddenSections={hiddenSections} onOpenSettings={() => setShowSettings(true)} />
 
       {/* Mobile top bar */}
@@ -266,16 +286,24 @@ function Dashboard() {
 
       <main className="md:ml-56 px-4 md:px-10 py-6 md:py-10 pt-20 md:pt-10 max-w-5xl">
         {/* Page header */}
-        <div className="no-print mb-8 md:mb-10 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-white text-2xl md:text-3xl font-bold tracking-tight">
-              {currentUser?.name ? `${currentUser.name.charAt(0).toUpperCase() + currentUser.name.slice(1)}'s Dashboard` : 'Dashboard'}
-            </h1>
-            <p className="text-[#475569] text-sm mt-1">Your personal health data, all in one place.</p>
+        <div className="no-print mb-8 md:mb-10 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div
+              className="w-11 h-11 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0"
+              style={{ background: accentColor, boxShadow: `0 6px 18px -4px ${accentColor}` }}
+            >
+              {currentUser?.initials ?? '??'}
+            </div>
+            <div>
+              <h1 className="text-white text-2xl md:text-3xl font-bold tracking-tight">
+                {currentUser?.name ? `${currentUser.name.charAt(0).toUpperCase() + currentUser.name.slice(1)}'s Dashboard` : 'Dashboard'}
+              </h1>
+              <p className="text-[#475569] text-sm mt-1">Your personal health data, all in one place.</p>
+            </div>
           </div>
           <button
             onClick={() => setShowExport(true)}
-            className="no-print flex-shrink-0 flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] border border-[#243450] hover:border-[#374d6c] text-xs font-medium px-3 py-2 rounded-xl transition-colors mt-1"
+            className="no-print flex-shrink-0 flex items-center gap-2 text-[#475569] hover:text-[#94a3b8] border border-[#243450] hover:border-[#374d6c] text-xs font-medium px-3 py-2 rounded-xl transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />

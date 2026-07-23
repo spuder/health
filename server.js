@@ -880,8 +880,9 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
   const pdfPath = path.join(DATA_DIR, 'pdfs', report.filename)
   if (!fs.existsSync(pdfPath)) return res.status(404).json({ error: 'PDF file not found' })
 
+  const downloadName = (report.original_filename || report.filename).replace(/[^\x20-\x7E]/g, '').replace(/"/g, '')
   res.setHeader('Content-Type', 'application/pdf')
-  res.setHeader('Content-Disposition', `inline; filename="${report.filename}"`)
+  res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`)
   fs.createReadStream(pdfPath).pipe(res)
 })
 
@@ -899,6 +900,13 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
   if (existing) {
     return res.status(409).json({ error: `Duplicate: this file was already imported (report from ${existing.date})` })
   }
+
+  // ── 0b. Persist the uploaded file to disk ─────────────────
+  const ext = path.extname(req.file.originalname || '') || (isCsv ? '.csv' : isPng ? '.png' : '.pdf')
+  const storedFilename = `${fileHash}${ext}`
+  const pdfsDir = path.join(DATA_DIR, 'pdfs')
+  fs.mkdirSync(pdfsDir, { recursive: true })
+  fs.writeFileSync(path.join(pdfsDir, storedFilename), req.file.buffer)
 
   // ── 1. Send file to Claude ────────────────────────────────
   let parsed
@@ -939,7 +947,7 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
   console.log('[labs-pdf] Claude OCR result:')
   console.log(JSON.stringify(parsed, null, 2))
 
-  res.json({ ok: true, debug: true, parsed, file_hash: fileHash })
+  res.json({ ok: true, debug: true, parsed, file_hash: fileHash, filename: storedFilename, original_filename: req.file.originalname })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -950,7 +958,7 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
 // ─────────────────────────────────────────────────────────────
 
 app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
-  const { date, source_type, metrics, reference_ranges, file_hash } = req.body
+  const { date, source_type, metrics, reference_ranges, file_hash, filename, original_filename } = req.body
   if (!date || !metrics) return res.status(400).json({ error: 'date and metrics are required' })
 
   const validMetrics = Object.entries(metrics)
@@ -990,9 +998,9 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
         rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
       }
       db.prepare(`
-        INSERT INTO lab_reports (date, filename, source_type, markers_json, file_hash)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(date, 'ocr_import', source_type ?? 'other', JSON.stringify(markerNames), file_hash ?? null)
+        INSERT INTO lab_reports (date, filename, original_filename, source_type, markers_json, file_hash)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(date, filename ?? 'unknown', original_filename ?? null, source_type ?? 'other', JSON.stringify(markerNames), file_hash ?? null)
     })()
     console.log(`[labs-confirm] Saved ${validMetrics.length} metrics for ${req.params.userId}`)
     res.json({ ok: true, count: validMetrics.length, markers_found: markerNames })

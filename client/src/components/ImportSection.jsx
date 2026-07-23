@@ -34,6 +34,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
   const [error, setError] = useState(null)
   const [importCount, setImportCount] = useState(0)
   const [fileHash, setFileHash] = useState(null)
+  const [storedFilename, setStoredFilename] = useState(null)
   const [reportsOpen, setReportsOpen] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -44,6 +45,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
     setChecked({})
     setError(null)
     setFileHash(null)
+    setStoredFilename(null)
   }
 
   async function processFile(file) {
@@ -61,6 +63,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
         setChecked(Object.fromEntries(keys.map(k => [k, true])))
         setParsed(result.parsed)
         setFileHash(result.file_hash ?? null)
+        setStoredFilename(result.filename ?? null)
         setPhase('preview')
       }
     } catch (err) {
@@ -97,7 +100,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
     const selectedMetrics = Object.fromEntries(keys.filter(k => checked[k]).map(k => [k, parsed.metrics[k]]))
     setPhase('uploading')
     try {
-      const result = await api.confirmLabsImport(userId, { ...parsed, metrics: selectedMetrics, file_hash: fileHash })
+      const result = await api.confirmLabsImport(userId, { ...parsed, metrics: selectedMetrics, file_hash: fileHash, filename: storedFilename, original_filename: fileName })
       setImportCount(result.count)
       setPhase('done')
       onRefresh?.()
@@ -283,10 +286,15 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <div>
-                      <span className="text-white text-sm font-medium">
-                        {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                      </span>
-                      <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
+                      <div>
+                        <span className="text-white text-sm font-medium">
+                          {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        </span>
+                        <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
+                      </div>
+                      {r.original_filename && (
+                        <div className="text-[#475569] text-xs mt-0.5">{r.original_filename}</div>
+                      )}
                     </div>
                     <span className="text-[#374d6c] text-xs">{r.markers.length} markers</span>
                   </div>

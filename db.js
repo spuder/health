@@ -93,6 +93,7 @@ export function getDb(userId) {
   // Migrations for columns added after initial deploy
   try { db.exec(`ALTER TABLE lab_reports ADD COLUMN file_hash TEXT`) } catch {}
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_reports_hash ON lab_reports(file_hash) WHERE file_hash IS NOT NULL`)
+  try { db.exec(`ALTER TABLE lab_reports ADD COLUMN original_filename TEXT`) } catch {}
 
   // Backfill file_hash for any existing reports that don't have one yet
   const unhashed = db.prepare(`SELECT id, filename FROM lab_reports WHERE file_hash IS NULL`).all()

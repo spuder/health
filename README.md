@@ -1,3 +1,12 @@
+# Health
+
+Aggregate all your health data into a single dashboard. 
+
+Allows for uploading PDF, png, and apple health data all into a single place. 
+Think of it like how YNAB, Mint, Monarch Money, Quicken aggregate all your bank accounts into a single place. Health is a self hosted dashboard that aggregates all your health data into a single place.
+
+Self hostable in docker.
+
 ## Development
 
 ```bash

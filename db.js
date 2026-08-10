@@ -57,6 +57,31 @@ const SCHEMA = `
     created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Raw DNA test files (23andMe/AncestryDNA/Nebula PDFs or raw-data .txt exports).
+  -- Stored on disk under DATA_DIR/dna/<file_hash>.<ext>; this table just tracks metadata.
+  CREATE TABLE IF NOT EXISTS dna_files (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename          TEXT    NOT NULL,
+    original_filename TEXT,
+    file_hash         TEXT,
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Manually-entered genetic traits (e.g. MTHFR C677T: CT). Optionally linked
+  -- to the dna_files row it came from, for reference — not auto-parsed (yet).
+  CREATE TABLE IF NOT EXISTS dna_traits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    gene       TEXT    NOT NULL,
+    variant    TEXT,
+    genotype   TEXT,
+    result     TEXT,
+    notes      TEXT,
+    file_id    INTEGER REFERENCES dna_files(id) ON DELETE SET NULL,
+    source     TEXT    NOT NULL DEFAULT 'manual',
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS protocols (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     month      TEXT    NOT NULL,
@@ -78,6 +103,8 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_metrics_metric  ON metrics(metric);
   CREATE INDEX IF NOT EXISTS idx_events_date     ON events(date);
   CREATE INDEX IF NOT EXISTS idx_protocols_month ON protocols(month);
+  CREATE INDEX IF NOT EXISTS idx_dna_traits_gene ON dna_traits(gene);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_dna_files_hash ON dna_files(file_hash) WHERE file_hash IS NOT NULL;
 `
 
 export function getDb(userId) {

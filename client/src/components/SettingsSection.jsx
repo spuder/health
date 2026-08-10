@@ -4,6 +4,7 @@ const CATEGORIES = [
   { id: 'exercise',  label: 'Exercise',   icon: '🏃',  description: 'Workouts and activity' },
   { id: 'heartrate', label: 'Heart Rate', icon: '❤️',  description: 'Resting and active heart rate' },
   { id: 'labs',      label: 'Labs',       icon: '🧪',  description: 'Blood work and lab results' },
+  { id: 'dna',       label: 'DNA',        icon: '🧬',  description: 'Genetic traits and DNA test uploads' },
   { id: 'events',    label: 'Life Events', icon: '📅', description: 'Milestones and logged events' },
   { id: 'protocols', label: 'Protocols',  icon: '📋',  description: 'Supplement and health protocols' },
   { id: 'import',    label: 'Import',     icon: '↑',   description: 'Data import tools' },

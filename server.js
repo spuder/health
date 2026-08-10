@@ -1011,6 +1011,141 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
+// DNA
+//
+// Two independent pieces, on purpose:
+// 1. dna_files  — raw test files (PDF summary or .txt raw-data export)
+//                 uploaded for safekeeping/reference. Not parsed yet.
+// 2. dna_traits — genetic traits (e.g. "MTHFR C677T: CT") typed in by hand.
+//                 Optionally references the file they were read off of.
+// ─────────────────────────────────────────────────────────────
+
+const DNA_MAX_BYTES = 30 * 1024 * 1024 // raw 23andMe/AncestryDNA exports run 15-25MB
+
+app.get('/api/:userId/dna', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const traits = db.prepare(`SELECT * FROM dna_traits ORDER BY gene ASC, id ASC`).all()
+  const files = db.prepare(`SELECT * FROM dna_files ORDER BY created_at DESC, id DESC`).all()
+  res.json({ traits, files })
+})
+
+app.post('/api/:userId/dna/traits', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const { gene, variant, genotype, result, notes, file_id } = req.body
+  if (!gene || !gene.trim()) return res.status(400).json({ error: 'gene is required' })
+
+  const info = db.prepare(`
+    INSERT INTO dna_traits (gene, variant, genotype, result, notes, file_id, source)
+    VALUES (@gene, @variant, @genotype, @result, @notes, @file_id, 'manual')
+  `).run({
+    gene: gene.trim(),
+    variant: variant?.trim() || null,
+    genotype: genotype?.trim() || null,
+    result: result?.trim() || null,
+    notes: notes?.trim() || null,
+    file_id: file_id ?? null,
+  })
+  const trait = db.prepare(`SELECT * FROM dna_traits WHERE id = ?`).get(info.lastInsertRowid)
+  res.json(trait)
+})
+
+app.patch('/api/:userId/dna/traits/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const existing = db.prepare(`SELECT * FROM dna_traits WHERE id = ?`).get(req.params.id)
+  if (!existing) return res.status(404).json({ error: 'Trait not found' })
+
+  const { gene, variant, genotype, result, notes, file_id } = req.body
+  if (gene !== undefined && !gene.trim()) return res.status(400).json({ error: 'gene cannot be empty' })
+
+  db.prepare(`
+    UPDATE dna_traits SET
+      gene       = @gene,
+      variant    = @variant,
+      genotype   = @genotype,
+      result     = @result,
+      notes      = @notes,
+      file_id    = @file_id,
+      updated_at = datetime('now')
+    WHERE id = @id
+  `).run({
+    id: req.params.id,
+    gene: gene !== undefined ? gene.trim() : existing.gene,
+    variant: variant !== undefined ? (variant?.trim() || null) : existing.variant,
+    genotype: genotype !== undefined ? (genotype?.trim() || null) : existing.genotype,
+    result: result !== undefined ? (result?.trim() || null) : existing.result,
+    notes: notes !== undefined ? (notes?.trim() || null) : existing.notes,
+    file_id: file_id !== undefined ? file_id : existing.file_id,
+  })
+  res.json(db.prepare(`SELECT * FROM dna_traits WHERE id = ?`).get(req.params.id))
+})
+
+app.delete('/api/:userId/dna/traits/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  db.prepare(`DELETE FROM dna_traits WHERE id = ?`).run(req.params.id)
+  res.json({ ok: true })
+})
+
+app.post('/api/:userId/dna/upload', requireUser, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (req.file.size > DNA_MAX_BYTES) {
+    return res.status(413).json({ error: `File too large — max ${DNA_MAX_BYTES / 1024 / 1024}MB` })
+  }
+
+  const nameLower = req.file.originalname?.toLowerCase() ?? ''
+  const ext = nameLower.endsWith('.txt') ? '.txt' : nameLower.endsWith('.pdf') ? '.pdf' : null
+  if (!ext) return res.status(400).json({ error: 'Only .pdf and .txt files are supported' })
+
+  const db = getDb(req.params.userId)
+  const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
+  const existing = db.prepare(`SELECT id, original_filename FROM dna_files WHERE file_hash = ?`).get(fileHash)
+  if (existing) {
+    return res.status(409).json({ error: `Duplicate: "${existing.original_filename}" was already uploaded` })
+  }
+
+  const storedFilename = `${fileHash}${ext}`
+  const dnaDir = path.join(DATA_DIR, 'dna')
+  fs.mkdirSync(dnaDir, { recursive: true })
+  fs.writeFileSync(path.join(dnaDir, storedFilename), req.file.buffer)
+
+  const info = db.prepare(`
+    INSERT INTO dna_files (filename, original_filename, file_hash)
+    VALUES (?, ?, ?)
+  `).run(storedFilename, req.file.originalname ?? storedFilename, fileHash)
+
+  res.json(db.prepare(`SELECT * FROM dna_files WHERE id = ?`).get(info.lastInsertRowid))
+})
+
+app.get('/api/:userId/dna/files/:id/download', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const file = db.prepare(`SELECT * FROM dna_files WHERE id = ?`).get(req.params.id)
+  if (!file) return res.status(404).json({ error: 'File not found' })
+
+  const filePath = path.join(DATA_DIR, 'dna', file.filename)
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing from disk' })
+
+  const downloadName = (file.original_filename || file.filename).replace(/[^\x20-\x7E]/g, '').replace(/"/g, '')
+  res.setHeader('Content-Type', file.filename.endsWith('.txt') ? 'text/plain' : 'application/pdf')
+  res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`)
+  fs.createReadStream(filePath).pipe(res)
+})
+
+app.delete('/api/:userId/dna/files/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const file = db.prepare(`SELECT * FROM dna_files WHERE id = ?`).get(req.params.id)
+  if (!file) return res.status(404).json({ error: 'File not found' })
+
+  db.transaction(() => {
+    db.prepare(`UPDATE dna_traits SET file_id = NULL WHERE file_id = ?`).run(req.params.id)
+    db.prepare(`DELETE FROM dna_files WHERE id = ?`).run(req.params.id)
+  })()
+
+  const filePath = path.join(DATA_DIR, 'dna', file.filename)
+  try { fs.unlinkSync(filePath) } catch {}
+
+  res.json({ ok: true })
+})
+
+// ─────────────────────────────────────────────────────────────
 // Protocols
 // ─────────────────────────────────────────────────────────────
 

@@ -7,13 +7,14 @@ import SleepSection from './components/SleepSection'
 import ExerciseSection from './components/ExerciseSection'
 import HeartRateSection from './components/HeartRateSection'
 import LabsSection from './components/LabsSection'
+import DnaSection from './components/DnaSection'
 import EventsSection from './components/EventsSection'
 import ImportSection from './components/ImportSection'
 import ProtocolsSection from './components/ProtocolsSection'
 import SettingsSection from './components/SettingsSection'
 import ExportModal from './components/ExportModal'
 
-const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'events', 'protocols', 'import']
+const NAV_IDS = ['body', 'sleep', 'exercise', 'heartrate', 'labs', 'dna', 'events', 'protocols', 'import']
 
 function useHiddenSections(userId) {
   const storageKey = userId ? `health_hidden_sections_${userId}` : null
@@ -126,6 +127,7 @@ function Dashboard() {
   const [heartrateData, setHeartrateData] = useState(null)
   const [bloodData,     setBloodData]     = useState(null)
   const [labReports,    setLabReports]    = useState(null)
+  const [dnaData,       setDnaData]       = useState(null)
   const [eventsData,    setEventsData]    = useState(null)
   const [protocolsData, setProtocolsData] = useState(null)
   const [loading, setLoading]       = useState(true)
@@ -136,7 +138,7 @@ function Dashboard() {
     if (showLoading) setLoading(true)
     setError(null)
     try {
-      const [body, sleep, exercise, heartrate, blood, events, reports, protocols] = await Promise.all([
+      const [body, sleep, exercise, heartrate, blood, events, reports, protocols, dna] = await Promise.all([
         api.getBody(currentUserId),
         api.getSleep(currentUserId),
         api.getExercise(currentUserId),
@@ -145,6 +147,7 @@ function Dashboard() {
         api.getEvents(currentUserId),
         api.getLabReports(currentUserId),
         api.getProtocols(currentUserId),
+        api.getDna(currentUserId),
       ])
       setBodyData(body)
       setSleepData(sleep)
@@ -154,6 +157,7 @@ function Dashboard() {
       setEventsData(events)
       setLabReports(reports)
       setProtocolsData(protocols)
+      setDnaData(dna)
     } catch (e) {
       setError('Could not connect to the API. Make sure the server is running on port 3001.')
     } finally {
@@ -171,6 +175,7 @@ function Dashboard() {
     setEventsData(null)
     setLabReports(null)
     setProtocolsData(null)
+    setDnaData(null)
     loadAll({ showLoading: true })
   }, [currentUserId, loadAll])
 
@@ -333,6 +338,7 @@ function Dashboard() {
             {!hiddenSections.has('exercise')  && <div className={printSections && !printSections.exercise  ? 'print-exclude' : ''}><ExerciseSection  data={exerciseData}  userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('heartrate') && <div className={printSections && !printSections.heartrate ? 'print-exclude' : ''}><HeartRateSection data={heartrateData} /></div>}
             {!hiddenSections.has('labs')      && <div className={printSections && !printSections.labs      ? 'print-exclude' : ''}><LabsSection      data={bloodData}     reports={labReports?.reports ?? []} /></div>}
+            {!hiddenSections.has('dna')       && <div className={printSections && !printSections.dna       ? 'print-exclude' : ''}><DnaSection       data={dnaData}       userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('events')    && <div className={printSections && !printSections.events    ? 'print-exclude' : ''}><EventsSection    data={eventsData}    userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('protocols') && <div className="print-exclude"><ProtocolsSection data={protocolsData ?? []} userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('import')    && <div className="print-exclude"><ImportSection userId={currentUserId} onRefresh={loadAll} reports={labReports?.reports ?? []} /></div>}

@@ -61,6 +61,23 @@ export const api = {
   deleteSubProtocol:      (userId, id)       => req(`/${userId}/sub-protocols/${id}`, { method: 'DELETE' }),
   copyProtocolToNextMonth:(userId, id)       => req(`/${userId}/protocols/${id}/copy-to-next`, { method: 'POST' }),
 
+  // ── DNA ───────────────────────────────────────────────────
+  getDna:         (userId)     => req(`/${userId}/dna`),
+  addDnaTrait:    (userId, e)  => req(`/${userId}/dna/traits`, { method: 'POST', body: JSON.stringify(e) }),
+  updateDnaTrait: (userId, id, e) => req(`/${userId}/dna/traits/${id}`, { method: 'PATCH', body: JSON.stringify(e) }),
+  deleteDnaTrait: (userId, id) => req(`/${userId}/dna/traits/${id}`, { method: 'DELETE' }),
+  deleteDnaFile:  (userId, id) => req(`/${userId}/dna/files/${id}`, { method: 'DELETE' }),
+  dnaFileUrl:     (userId, id) => `/api/${userId}/dna/files/${id}/download`,
+
+  uploadDnaFile: async (userId, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`/api/${userId}/dna/upload`, { method: 'POST', body: form })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error ?? `Upload failed (${res.status})`)
+    return json
+  },
+
   importLabsPdf: async (userId, file) => {
     const form = new FormData()
     form.append('pdf', file)

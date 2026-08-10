@@ -429,10 +429,21 @@ export default function LabsSection({ data, reports = [] }) {
     })
   }
 
-  const normalizedSearch = searchQuery.trim().toLowerCase().replace(/\s+/g, '_')
+  const searchTerms = searchQuery
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean)
 
   function isVisible(key) {
-    if (normalizedSearch && !key.toLowerCase().includes(normalizedSearch) && !toTitle(key).toLowerCase().includes(searchQuery.trim().toLowerCase())) return false
+    if (searchTerms.length) {
+      const keyLower = key.toLowerCase()
+      const titleLower = toTitle(key).toLowerCase()
+      const matches = searchTerms.some(term => {
+        const termLower = term.toLowerCase()
+        return keyLower.includes(termLower.replace(/\s+/g, '_')) || titleLower.includes(termLower)
+      })
+      if (!matches) return false
+    }
     const status = getMarkerStatus(key, entries, markers)
     // Markers with no range config have no status — always show them
     if (status === null) return true
@@ -497,7 +508,7 @@ export default function LabsSection({ data, reports = [] }) {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search markers…"
+              placeholder="Search markers… (comma-separate for multiple)"
               className="w-full bg-[#111827] border border-[#243450] hover:border-[#374d6c] focus:border-[#4f6080] text-[#cbd5e1] placeholder-[#475569] text-sm rounded-xl pl-10 pr-10 py-2.5 outline-none transition-colors"
             />
             {searchQuery && (

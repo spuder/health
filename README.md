@@ -1,6 +1,21 @@
 # Health
 
-A self-hosted health dashboard that aggregates all your health data into a single place — Apple Health, lab work, DNA reports, and more. Think of it like how YNAB, Mint, Monarch Money, or Quicken pull every bank account into one view; Health does that for your body.
+<center>
+  <img src="./logo.png" alt="Health logo" width="180" style="display:block;margin:0 auto;">
+</center>
+
+**One health dashboard to rule them all.**
+
+Import all your bloodwork, inbody, protocols, smart scale, apple health into a single dashboard. 
+
+
+## Features
+
+- Import/Export CSV/JSON
+- Self host on rasberry pi or any Docker host
+- Track protocols
+- Optional OCR scanning of bloodwork
+- Rest API to sync with external services
 
 ## What it does
 
@@ -9,13 +24,18 @@ A self-hosted health dashboard that aggregates all your health data into a singl
 - **Multi-user.** Each family member gets their own isolated profile and database, switchable from the sidebar.
 - **Self-hosted.** One Docker image, one data volume — your data never leaves your own infrastructure.
 
-## Architecture overview
+## Screenshots
 
-- **Frontend** — React SPA built with Vite (`client/`), served as static files by the Express server.
-- **Backend** — A single Express server (`server.js`) exposes a REST API per user (`/api/:userId/...`) for body metrics, blood labs, sleep, exercise, heart rate, DNA, events, and protocols.
-- **Storage** — [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3), one database file per user, living in a single `/data` volume. A migration script (`scripts/migrate.js`) runs on every container start and is idempotent (safe to re-run, never overwrites existing rows).
-- **OCR / parsing** — Uploaded PDFs and images are sent to the Anthropic API to extract structured lab values before they're written to the database, with a confirmation step in the UI before anything is saved.
-- **Single Docker image** — A multi-stage build compiles `better-sqlite3` and the frontend, then ships a slim runtime image (see [Dockerfile](./Dockerfile)) with just the compiled backend, built frontend, and an entrypoint that seeds `/data` on first run.
+<table>
+  <tr>
+    <td><img src="./images/dashboard-body.png" width="420" alt="Body section: weight chart, BMI, muscle mass, body fat"></td>
+    <td><img src="./images/dashboard-exercise-heartrate.png" width="420" alt="Exercise and resting heart rate sections"></td>
+  </tr>
+  <tr>
+    <td><img src="./images/dashboard-labs-dna-events.png" width="420" alt="Labs, DNA, and events sections"></td>
+    <td><img src="./images/dashboard-protocols-import.png" width="420" alt="Protocols and import sections"></td>
+  </tr>
+</table>
 
 ## Development
 

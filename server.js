@@ -1014,7 +1014,7 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
 // DNA
 //
 // Two independent pieces, on purpose:
-// 1. dna_files  — raw test files (PDF summary or .txt raw-data export)
+// 1. dna_files  — raw test files (PDF/HTML summary or .txt raw-data export)
 //                 uploaded for safekeeping/reference. Not parsed yet.
 // 2. dna_traits — genetic traits (e.g. "MTHFR C677T: CT") typed in by hand.
 //                 Optionally references the file they were read off of.
@@ -1092,8 +1092,12 @@ app.post('/api/:userId/dna/upload', requireUser, upload.single('file'), (req, re
   }
 
   const nameLower = req.file.originalname?.toLowerCase() ?? ''
-  const ext = nameLower.endsWith('.txt') ? '.txt' : nameLower.endsWith('.pdf') ? '.pdf' : null
-  if (!ext) return res.status(400).json({ error: 'Only .pdf and .txt files are supported' })
+  const ext = nameLower.endsWith('.txt') ? '.txt'
+    : nameLower.endsWith('.pdf') ? '.pdf'
+    : nameLower.endsWith('.html') ? '.html'
+    : nameLower.endsWith('.htm') ? '.html'
+    : null
+  if (!ext) return res.status(400).json({ error: 'Only .pdf, .txt, and .html files are supported' })
 
   const db = getDb(req.params.userId)
   const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
@@ -1124,8 +1128,9 @@ app.get('/api/:userId/dna/files/:id/download', requireUser, (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing from disk' })
 
   const downloadName = (file.original_filename || file.filename).replace(/[^\x20-\x7E]/g, '').replace(/"/g, '')
-  res.setHeader('Content-Type', file.filename.endsWith('.txt') ? 'text/plain' : 'application/pdf')
-  res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`)
+  const contentType = file.filename.endsWith('.txt') ? 'text/plain' : file.filename.endsWith('.html') ? 'text/html' : 'application/pdf'
+  res.setHeader('Content-Type', contentType)
+  res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`)
   fs.createReadStream(filePath).pipe(res)
 })
 

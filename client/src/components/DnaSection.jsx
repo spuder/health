@@ -226,6 +226,8 @@ function TraitRow({ trait, onDelete }) {
 function FileRow({ file, userId, onDelete }) {
   const [confirming, setConfirming] = useState(false)
   const isTxt = file.filename?.endsWith('.txt')
+  const isHtml = file.filename?.endsWith('.html')
+  const typeLabel = isTxt ? 'Raw data' : isHtml ? 'HTML' : 'PDF'
 
   return (
     <div className="flex items-center justify-between bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3">
@@ -235,17 +237,16 @@ function FileRow({ file, userId, onDelete }) {
         </svg>
         <div className="min-w-0">
           <p className="text-white text-sm font-medium truncate">{file.original_filename}</p>
-          <p className="text-[#475569] text-xs mt-0.5">{isTxt ? 'Raw data' : 'PDF'} · {new Date(file.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+          <p className="text-[#475569] text-xs mt-0.5">{typeLabel} · {new Date(file.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
         <a
           href={api.dnaFileUrl(userId, file.id)}
-          target="_blank"
-          rel="noopener noreferrer"
+          download={file.original_filename}
           className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#243450] hover:border-[#374d6c] transition-colors"
         >
-          View
+          Download
         </a>
         {confirming ? (
           <div className="flex items-center gap-1.5">
@@ -276,8 +277,8 @@ export default function DnaSection({ data, userId, onRefresh }) {
   async function handleUpload(file) {
     if (!file) return
     const nameLower = file.name.toLowerCase()
-    if (!nameLower.endsWith('.pdf') && !nameLower.endsWith('.txt')) {
-      setError('Please upload a PDF or .txt file.')
+    if (!nameLower.endsWith('.pdf') && !nameLower.endsWith('.txt') && !nameLower.endsWith('.html') && !nameLower.endsWith('.htm')) {
+      setError('Please upload a PDF, .txt, or .html file.')
       return
     }
     setError(null)
@@ -350,7 +351,7 @@ export default function DnaSection({ data, userId, onRefresh }) {
           className={`cursor-pointer rounded-xl border-2 border-dashed transition-colors flex items-center justify-center gap-2.5 py-3.5 select-none mb-4
             ${dragging ? 'border-cyan-500 bg-cyan-500/5' : 'border-[#243450] bg-[#131d2e] hover:border-[#374d6c] hover:bg-[#111827]'}`}
         >
-          <input ref={fileInputRef} type="file" accept=".pdf,.PDF,.txt,.TXT" className="hidden" onChange={handleFileInput} />
+          <input ref={fileInputRef} type="file" accept=".pdf,.PDF,.txt,.TXT,.html,.HTML,.htm,.HTM" className="hidden" onChange={handleFileInput} />
           {uploading ? (
             <svg className="w-4 h-4 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -362,7 +363,7 @@ export default function DnaSection({ data, userId, onRefresh }) {
             </svg>
           )}
           <p className="text-[#94a3b8] text-xs font-medium">
-            {uploading ? 'Uploading…' : 'Drop a PDF or .txt raw-data file, or click to browse'}
+            {uploading ? 'Uploading…' : 'Drop a PDF, .txt, or .html file, or click to browse'}
           </p>
         </div>
 

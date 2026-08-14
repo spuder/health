@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import RawDataModal from './RawDataModal'
+import { api } from '../api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ReferenceArea, ResponsiveContainer,
@@ -75,6 +76,12 @@ function fmtRange(low, high, unit) {
 
 function toTitle(key) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Mirrors the server's normalizeMetricKey — used only to preview the resulting
+// marker name client-side before the merge request round-trips.
+function toKey(str) {
+  return str.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
 function getMarkerStatus(key, entries, markers) {
@@ -247,7 +254,152 @@ function MarkerInfoPopup({ markerKey }) {
   )
 }
 
-function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow, compact = false, reports = [] }) {
+function MarkerMenu({ markerKey, onRename, onMerge }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-5 h-5 rounded-full border border-[#374d6c] text-[#475569] hover:text-[#94a3b8] hover:border-[#475569] flex items-center justify-center transition-colors"
+        title="Marker options"
+      >
+        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-20 w-48 bg-[#111826] border border-[#243450] rounded-xl p-1 shadow-2xl">
+          <button
+            onClick={() => { setOpen(false); onRename(markerKey) }}
+            className="w-full text-left text-[#cbd5e1] hover:bg-[#1a2540] text-xs px-3 py-2 rounded-lg transition-colors"
+          >
+            Rename marker
+          </button>
+          <button
+            onClick={() => { setOpen(false); onMerge(markerKey) }}
+            className="w-full text-left text-[#cbd5e1] hover:bg-[#1a2540] text-xs px-3 py-2 rounded-lg transition-colors"
+          >
+            Merge into another marker…
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MergeMarkerModal({ markerKey, mode, otherKeys, userId, onClose, onMerged }) {
+  const [target, setTarget] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [result, setResult] = useState(null)
+  const overlayRef = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!target.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await api.mergeMarkers(userId, { from: markerKey, into: target })
+      setResult({ ...res, into: target })
+      onMerged()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(7, 11, 18, 0.85)', backdropFilter: 'blur(6px)' }}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
+    >
+      <div className="bg-[#131d2e] border border-[#243450] rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#243450]">
+          <h2 className="text-white font-semibold text-base">{mode === 'merge' ? 'Merge Marker' : 'Rename Marker'}</h2>
+          <button onClick={onClose} className="text-[#475569] hover:text-[#94a3b8] text-xl transition-colors leading-none">✕</button>
+        </div>
+
+        <div className="px-6 py-5">
+          {result ? (
+            <div className="flex flex-col gap-4">
+              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+                Moved <span className="text-white font-medium">{result.merged}</span> {result.merged === 1 ? 'entry' : 'entries'} from{' '}
+                <span className="text-white font-medium">{toTitle(markerKey)}</span> into{' '}
+                <span className="text-white font-medium">{toTitle(toKey(result.into))}</span>.
+              </p>
+              {result.conflicts > 0 && (
+                <p className="text-amber-400 text-xs leading-relaxed">
+                  {result.conflicts} {result.conflicts === 1 ? 'entry has' : 'entries have'} a value on the same date already recorded under the target marker — those were left under {toTitle(markerKey)} so you can resolve them manually.
+                </p>
+              )}
+              <button onClick={onClose} className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
+                Done
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <p className="text-[#64748b] text-xs leading-relaxed">
+                {mode === 'merge'
+                  ? `Move every entry from "${toTitle(markerKey)}" into another marker's history — useful when a marker was mistakenly imported under the wrong name.`
+                  : `Rename "${toTitle(markerKey)}" everywhere it appears — past entries, charts, and reference ranges.`}
+              </p>
+              <div>
+                <label className="block text-[#94a3b8] text-xs font-medium mb-1.5">
+                  {mode === 'merge' ? 'Merge into' : 'New name'}
+                </label>
+                {mode === 'merge' ? (
+                  <select value={target} onChange={e => setTarget(e.target.value)} required>
+                    <option value="" disabled>Select a marker…</option>
+                    {otherKeys.map(k => <option key={k} value={k}>{toTitle(k)}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Testosterone"
+                    value={target}
+                    onChange={e => setTarget(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                )}
+              </div>
+              {error && <p className="text-red-400 text-xs">{error}</p>}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={onClose} className="flex-1 bg-[#1a2540] border border-[#243450] hover:border-[#374d6c] text-[#94a3b8] text-sm font-medium py-2.5 rounded-lg transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={saving || !target.trim()} className="flex-1 bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-lg transition-colors">
+                  {saving ? 'Saving…' : mode === 'merge' ? 'Merge' : 'Rename'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow, optimalHigh, optimalLow, compact = false, reports = [], onRename, onMerge }) {
   const hasOptimal = optimalLow != null || optimalHigh != null
   const hasNormal = rangeLow != null || rangeHigh != null
   const filtered = entries.filter(e => e[markerKey] != null)
@@ -301,6 +453,7 @@ function LabChart({ title, markerKey, entries, unit, color, rangeHigh, rangeLow,
             </span>
           )}
           <MarkerInfoPopup markerKey={markerKey} />
+          {(onRename || onMerge) && <MarkerMenu markerKey={markerKey} onRename={onRename} onMerge={onMerge} />}
         </div>
       </div>
 
@@ -398,10 +551,11 @@ const STATUS_FILTERS = [
   { id: 'out', label: 'Out of Range', activeClass: 'border-red-700     bg-red-950     text-red-400' },
 ]
 
-export default function LabsSection({ data, reports = [] }) {
+export default function LabsSection({ data, reports = [], userId, onRefresh }) {
   const [activeFilters, setActiveFilters] = useState(new Set(['optimal', 'normal', 'out']))
   const [searchQuery, setSearchQuery] = useState('')
   const [showRaw, setShowRaw] = useState(false)
+  const [manage, setManage] = useState(null) // { markerKey, mode: 'rename' | 'merge' }
   const [layout, setLayout] = useState('card')
   const entries = data?.entries ?? []
   const markers = data?.markers ?? {}
@@ -573,6 +727,8 @@ export default function LabsSection({ data, reports = [] }) {
                     rangeHigh={markers[key]?.range_high}
                     compact={section.compact ?? false}
                     reports={reports}
+                    onRename={userId ? (k) => setManage({ markerKey: k, mode: 'rename' }) : undefined}
+                    onMerge={userId ? (k) => setManage({ markerKey: k, mode: 'merge' }) : undefined}
                   />
                 ))}
               </div>
@@ -597,6 +753,16 @@ export default function LabsSection({ data, reports = [] }) {
         </div>
       )}
       {showRaw && <RawDataModal label="labs" data={{ blood: data }} onClose={() => setShowRaw(false)} />}
+      {manage && (
+        <MergeMarkerModal
+          markerKey={manage.markerKey}
+          mode={manage.mode}
+          otherKeys={allMarkerKeys.filter(k => k !== manage.markerKey).sort((a, b) => toTitle(a).localeCompare(toTitle(b)))}
+          userId={userId}
+          onClose={() => setManage(null)}
+          onMerged={onRefresh}
+        />
+      )}
     </section>
   )
 }

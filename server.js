@@ -54,6 +54,14 @@ function pivotMetrics(rows) {
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
 }
 
+// Normalize free-typed marker names into the snake_case keys used as `metrics.metric`
+// (e.g. "Total Testosterone" -> "total_testosterone").
+function normalizeMetricKey(raw) {
+  if (typeof raw !== 'string') return null
+  const key = raw.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return key || null
+}
+
 // ─────────────────────────────────────────────────────────────
 // Users
 // ─────────────────────────────────────────────────────────────
@@ -332,6 +340,66 @@ app.delete('/api/:userId/blood/:id', requireUser, (req, res) => {
   const placeholders = exclude.map(() => '?').join(',')
   db.prepare(`DELETE FROM metrics WHERE id = ? AND metric NOT IN (${placeholders})`).run(req.params.id, ...exclude)
   res.json({ ok: true })
+})
+
+// Merge/rename a marker in place — e.g. fold "total_testosterone" (mistakenly imported
+// under the wrong name for a few reports) into "testosterone" so history reads as one series.
+// Also handles a plain rename when `into` doesn't exist yet under any data.
+//
+// Per (date, source) pair, the target ("into") wins if a value already exists there — those
+// rows are left under the original name and reported back as `conflicts` for manual review.
+app.post('/api/:userId/markers/merge', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const from = normalizeMetricKey(req.body.from)
+  const into = normalizeMetricKey(req.body.into)
+
+  if (!from || !into) return res.status(400).json({ error: 'from and into are required' })
+  if (from === into) return res.status(400).json({ error: '"from" and "into" must be different markers' })
+
+  const fromRows = db.prepare(`SELECT id, date, source FROM metrics WHERE metric = ?`).all(from)
+  const existsAtInto = db.prepare(`SELECT 1 FROM metrics WHERE date = ? AND metric = ? AND source = ?`)
+  const rename = db.prepare(`UPDATE metrics SET metric = ? WHERE id = ?`)
+
+  let merged = 0, conflicts = 0
+  const mergedDates = new Set()
+
+  db.transaction(() => {
+    for (const row of fromRows) {
+      if (existsAtInto.get(row.date, into, row.source)) {
+        conflicts++
+        continue
+      }
+      rename.run(into, row.id)
+      merged++
+      mergedDates.add(row.date)
+    }
+
+    // Reference range / unit config: keep the target's if it already has one,
+    // otherwise carry the source's config over.
+    const intoHasConfig = db.prepare(`SELECT 1 FROM marker_configs WHERE metric = ?`).get(into)
+    if (intoHasConfig) {
+      db.prepare(`DELETE FROM marker_configs WHERE metric = ?`).run(from)
+    } else {
+      db.prepare(`UPDATE marker_configs SET metric = ? WHERE metric = ?`).run(into, from)
+    }
+
+    // Cosmetic: relabel the marker in lab-report snapshots for the reports we actually merged.
+    if (mergedDates.size) {
+      const placeholders = [...mergedDates].map(() => '?').join(',')
+      const reports = db.prepare(
+        `SELECT id, markers_json FROM lab_reports WHERE date IN (${placeholders})`
+      ).all(...mergedDates)
+      const updateReport = db.prepare(`UPDATE lab_reports SET markers_json = ? WHERE id = ?`)
+      for (const r of reports) {
+        let names
+        try { names = JSON.parse(r.markers_json ?? '[]') } catch { continue }
+        if (!names.includes(from)) continue
+        updateReport.run(JSON.stringify([...new Set(names.map(n => n === from ? into : n))]), r.id)
+      }
+    }
+  })()
+
+  res.json({ ok: true, merged, conflicts })
 })
 
 // ─────────────────────────────────────────────────────────────

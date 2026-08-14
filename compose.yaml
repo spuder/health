@@ -11,6 +11,9 @@ services:
       - NODE_ENV=production
       - DATA_DIR=/data
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    dns:
+      - 100.100.100.100 # Tailscale MagicDNS — pinned so a redeploy can't silently bake in a bad DNS snapshot
+      - 1.1.1.1 # fallback if Tailscale DNS is briefly unavailable
     restart: unless-stopped
     labels:
       - "docktail.service.enable=true"

@@ -23,6 +23,7 @@ export const api = {
   getBlood:    (userId)     => req(`/${userId}/blood`),
   logBlood:    (userId, e)  => req(`/${userId}/blood`,    { method: 'POST', body: JSON.stringify(e) }),
   deleteBlood: (userId, id) => req(`/${userId}/blood/${id}`, { method: 'DELETE' }),
+  mergeMarkers:(userId, e)  => req(`/${userId}/markers/merge`, { method: 'POST', body: JSON.stringify(e) }),
 
   // ── Sleep ─────────────────────────────────────────────────
   getSleep:    (userId)     => req(`/${userId}/sleep`),

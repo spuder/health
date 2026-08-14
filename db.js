@@ -122,6 +122,13 @@ export function getDb(userId) {
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_reports_hash ON lab_reports(file_hash) WHERE file_hash IS NOT NULL`)
   try { db.exec(`ALTER TABLE lab_reports ADD COLUMN original_filename TEXT`) } catch {}
 
+  // Links a metrics row back to the lab_reports import that wrote it, so a bad
+  // import (wrong lab, wrong account) can be deleted cleanly instead of leaving
+  // orphaned values behind. NULL for rows written before this column existed or
+  // by non-lab-import sources (manual entry, Apple Health, etc.).
+  try { db.exec(`ALTER TABLE metrics ADD COLUMN lab_report_id INTEGER REFERENCES lab_reports(id) ON DELETE SET NULL`) } catch {}
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_metrics_lab_report ON metrics(lab_report_id)`)
+
   // Backfill file_hash for any existing reports that don't have one yet
   const unhashed = db.prepare(`SELECT id, filename FROM lab_reports WHERE file_hash IS NULL`).all()
   if (unhashed.length) {

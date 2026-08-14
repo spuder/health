@@ -25,6 +25,66 @@ function toLabel(key) {
     .replace(/\bEgfr\b/, 'eGFR').replace(/\bHba1c\b/, 'HbA1c')
 }
 
+function ReportRow({ report: r, userId, onDelete }) {
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await onDelete(r.id)
+    } catch {
+      setDeleting(false)
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3">
+      <div className="flex items-center gap-3">
+        <svg className="w-4 h-4 text-[#475569] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <div>
+          <div>
+            <span className="text-white text-sm font-medium">
+              {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            </span>
+            <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
+          </div>
+          {r.original_filename && (
+            <div className="text-[#475569] text-xs mt-0.5">{r.original_filename}</div>
+          )}
+        </div>
+        <span className="text-[#374d6c] text-xs">{r.markers.length} markers</span>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <a
+          href={api.labReportPdfUrl(userId, r.id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#243450] hover:border-[#374d6c] transition-colors"
+        >
+          View PDF
+        </a>
+        {confirming ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[#475569] text-xs">Delete import & its {r.markers.length} metric{r.markers.length !== 1 ? 's' : ''}?</span>
+            <button onClick={handleDelete} disabled={deleting} className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40 font-medium transition-colors">
+              {deleting ? 'Deleting…' : 'Yes'}
+            </button>
+            <button onClick={() => setConfirming(false)} disabled={deleting} className="text-xs text-[#475569] hover:text-[#94a3b8] transition-colors">No</button>
+          </div>
+        ) : (
+          <button onClick={() => setConfirming(true)} className="text-[#374d6c] hover:text-red-400 transition-colors text-sm" title="Delete this import">
+            ✕
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ImportSection({ userId, onRefresh, reports = [] }) {
   const [phase, setPhase] = useState('idle') // idle | uploading | preview | done
   const [dragging, setDragging] = useState(false)
@@ -83,6 +143,11 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
     setDragging(false)
     const file = e.dataTransfer.files?.[0]
     if (file) processFile(file)
+  }
+
+  async function handleDeleteReport(id) {
+    await api.deleteLabReport(userId, id)
+    onRefresh?.()
   }
 
   function toggleMetric(key) {
@@ -280,33 +345,7 @@ export default function ImportSection({ userId, onRefresh, reports = [] }) {
           {reportsOpen && (
             <div className="flex flex-col gap-2">
               {reports.map(r => (
-                <div key={r.id} className="flex items-center justify-between bg-[#131d2e] border border-[#243450] rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <svg className="w-4 h-4 text-[#475569] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <div>
-                      <div>
-                        <span className="text-white text-sm font-medium">
-                          {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        </span>
-                        <span className="text-[#475569] text-xs ml-2">{SOURCE_LABEL[r.source_type] ?? r.source_type}</span>
-                      </div>
-                      {r.original_filename && (
-                        <div className="text-[#475569] text-xs mt-0.5">{r.original_filename}</div>
-                      )}
-                    </div>
-                    <span className="text-[#374d6c] text-xs">{r.markers.length} markers</span>
-                  </div>
-                  <a
-                    href={api.labReportPdfUrl(userId, r.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#475569] hover:text-white text-xs font-medium px-3 py-1.5 rounded-lg border border-[#243450] hover:border-[#374d6c] transition-colors"
-                  >
-                    View PDF
-                  </a>
-                </div>
+                <ReportRow key={r.id} report={r} userId={userId} onDelete={handleDeleteReport} />
               ))}
             </div>
           )}

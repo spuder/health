@@ -954,6 +954,45 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
   fs.createReadStream(pdfPath).pipe(res)
 })
 
+// Undo a bad lab import — wrong file, wrong lab, wrong account, etc.
+// Removes the report row, every metric value it wrote, and the stored file.
+app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
+  const db = getDb(req.params.userId)
+  const report = db.prepare(`SELECT * FROM lab_reports WHERE id = ?`).get(req.params.id)
+  if (!report) return res.status(404).json({ error: 'Report not found' })
+
+  let markerNames = []
+  try { markerNames = JSON.parse(report.markers_json ?? '[]') } catch {}
+
+  const deletedMetrics = db.transaction(() => {
+    // Metrics explicitly stamped with this report's id.
+    const linked = db.prepare(`DELETE FROM metrics WHERE lab_report_id = ?`).run(report.id)
+
+    // Legacy fallback for reports imported before lab_report_id existed —
+    // match by date + metric name, but only among still-unlinked rows so we
+    // never touch a value another (properly linked) report owns.
+    let legacyChanges = 0
+    if (markerNames.length) {
+      const placeholders = markerNames.map(() => '?').join(',')
+      legacyChanges = db.prepare(`
+        DELETE FROM metrics
+        WHERE source = 'pdf_import' AND lab_report_id IS NULL AND date = ? AND metric IN (${placeholders})
+      `).run(report.date, ...markerNames).changes
+    }
+
+    db.prepare(`DELETE FROM lab_reports WHERE id = ?`).run(report.id)
+    return linked.changes + legacyChanges
+  })()
+
+  if (report.filename) {
+    const filePath = path.join(DATA_DIR, 'pdfs', report.filename)
+    fs.unlink(filePath, () => {})
+  }
+
+  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${deletedMetrics} metrics removed`)
+  res.json({ ok: true, deleted_metrics: deletedMetrics })
+})
+
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
@@ -1037,11 +1076,12 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
 
   const upsert = db.prepare(`
-    INSERT INTO metrics (date, metric, value, source, notes)
-    VALUES (@date, @metric, @value, @source, @notes)
+    INSERT INTO metrics (date, metric, value, source, notes, lab_report_id)
+    VALUES (@date, @metric, @value, @source, @notes, @lab_report_id)
     ON CONFLICT(date, metric, source) DO UPDATE SET
       value = excluded.value,
-      notes = excluded.notes
+      notes = excluded.notes,
+      lab_report_id = excluded.lab_report_id
   `)
 
   const rangeUpsert = db.prepare(`
@@ -1058,17 +1098,20 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
 
   try {
     db.transaction(() => {
+      // Insert the report row first so its id can be stamped onto every metric
+      // it writes — that's what lets a bad import be deleted cleanly later.
+      const { lastInsertRowid: reportId } = db.prepare(`
+        INSERT INTO lab_reports (date, filename, original_filename, source_type, markers_json, file_hash)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(date, filename ?? 'unknown', original_filename ?? null, source_type ?? 'other', JSON.stringify(markerNames), file_hash ?? null)
+
       for (const [metric, value] of validMetrics) {
-        upsert.run({ date, metric, value: Number(value), source: 'pdf_import', notes: null })
+        upsert.run({ date, metric, value: Number(value), source: 'pdf_import', notes: null, lab_report_id: reportId })
       }
       for (const [metric, { low, high }] of Object.entries(reference_ranges ?? {})) {
         if (low == null && high == null) continue
         rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
       }
-      db.prepare(`
-        INSERT INTO lab_reports (date, filename, original_filename, source_type, markers_json, file_hash)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(date, filename ?? 'unknown', original_filename ?? null, source_type ?? 'other', JSON.stringify(markerNames), file_hash ?? null)
     })()
     console.log(`[labs-confirm] Saved ${validMetrics.length} metrics for ${req.params.userId}`)
     res.json({ ok: true, count: validMetrics.length, markers_found: markerNames })

@@ -33,7 +33,7 @@ export default function Sidebar({ active, onNav, isOpen, onClose, hiddenSections
       )}
 
       <aside className={`
-        fixed left-0 top-0 h-screen w-56 bg-[#111826] border-r border-[#243450] flex flex-col z-30
+        fixed left-0 top-0 h-dvh w-56 bg-[#111826] border-r border-[#243450] flex flex-col z-30
         transition-transform duration-300
         md:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}

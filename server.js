@@ -1031,8 +1031,8 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
         ]
 
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
-      max_tokens: 4096,
+      model: 'claude-opus-5',
+      max_tokens: 16000,
       system: LAB_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     })
@@ -1041,7 +1041,9 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
       throw new Error('Response too large — try a shorter file or split it into sections')
     }
 
-    const raw = msg.content[0]?.text?.trim() ?? ''
+    // Opus 5 thinks by default, so content[0] is a (text-less) thinking block,
+    // not the answer — pull the first actual text block instead of index 0.
+    const raw = msg.content.find(b => b.type === 'text')?.text?.trim() ?? ''
     if (!raw) throw new Error('Empty response from AI')
     const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     parsed = JSON.parse(jsonStr)

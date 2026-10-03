@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 import multer from 'multer'
 
 import Anthropic from '@anthropic-ai/sdk'
-import { getDb, readUsers, writeUsers, DATA_DIR } from './db.js'
+import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, DATA_DIR } from './db.js'
 
 if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
   console.error('FATAL: ANTHROPIC_API_KEY is not set. Add it to your .env file.')
@@ -106,10 +106,36 @@ app.patch('/api/users/:userId', requireUser, (req, res) => {
   res.json({ ok: true, user: users[idx] })
 })
 
+// Removing the manifest entry is not enough: the cached connection and the
+// <userId>.db file both survive, so re-adding the same name (which slugs back
+// to the same id) reopens the old database and resurrects the previous
+// profile's entire history. Evict the handle and move the data aside.
+//
+// Archived, never deleted — see archiveUserDb/archiveUserPdfs in db.js for the
+// naming and for what is deliberately left in place.
 app.delete('/api/users/:userId', requireUser, (req, res) => {
-  const users = readUsers().filter(u => u.id !== req.params.userId)
-  writeUsers(users)
-  res.json({ ok: true })
+  const { userId } = req.params
+
+  // Manifest first: if an archive rename fails midway the profile is still
+  // gone from the UI, rather than listed but holding a closed connection.
+  writeUsers(readUsers().filter(u => u.id !== userId))
+
+  const archived = { db: [], pdfs: null }
+  try {
+    const db = archiveUserDb(userId)
+    archived.db = db.files
+    const pdfs = archiveUserPdfs(userId)
+    if (pdfs.archived) archived.pdfs = pdfs.dir
+  } catch (err) {
+    console.error(`[users] ${userId}: archive failed — ${err.message}`)
+    return res.status(500).json({
+      error: `Profile '${userId}' was removed from the list, but its data could not be archived: ${err.message}`,
+      archived,
+    })
+  }
+
+  console.log(`[users] Deleted ${userId}; archived ${[...archived.db, archived.pdfs].filter(Boolean).join(', ') || 'nothing (no data on disk)'}`)
+  res.json({ ok: true, archived })
 })
 
 // ─────────────────────────────────────────────────────────────

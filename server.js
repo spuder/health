@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 import multer from 'multer'
 
 import Anthropic from '@anthropic-ai/sdk'
-import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, DATA_DIR } from './db.js'
+import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, archiveUserDna, DATA_DIR } from './db.js'
 
 if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
   console.error('FATAL: ANTHROPIC_API_KEY is not set. Add it to your .env file.')
@@ -166,12 +166,14 @@ app.delete('/api/users/:userId', requireUser, (req, res) => {
   // gone from the UI, rather than listed but holding a closed connection.
   writeUsers(readUsers().filter(u => u.id !== userId))
 
-  const archived = { db: [], pdfs: null }
+  const archived = { db: [], pdfs: null, dna: null }
   try {
     const db = archiveUserDb(userId)
     archived.db = db.files
     const pdfs = archiveUserPdfs(userId)
     if (pdfs.archived) archived.pdfs = pdfs.dir
+    const dna = archiveUserDna(userId)
+    if (dna.archived) archived.dna = dna.dir
   } catch (err) {
     console.error(`[users] ${userId}: archive failed — ${err.message}`)
     return res.status(500).json({
@@ -180,7 +182,7 @@ app.delete('/api/users/:userId', requireUser, (req, res) => {
     })
   }
 
-  console.log(`[users] Deleted ${userId}; archived ${[...archived.db, archived.pdfs].filter(Boolean).join(', ') || 'nothing (no data on disk)'}`)
+  console.log(`[users] Deleted ${userId}; archived ${[...archived.db, archived.pdfs, archived.dna].filter(Boolean).join(', ') || 'nothing (no data on disk)'}`)
   res.json({ ok: true, archived })
 })
 
@@ -1631,6 +1633,29 @@ app.delete('/api/:userId/dna/traits/:id', requireUser, (req, res) => {
   res.json({ ok: true })
 })
 
+// DNA files were written to one flat, content-addressed DATA_DIR/dna/ shared by
+// every profile. Because the upload de-dupe check is per-user, two people who
+// upload the same raw-data export both get a dna_files row pointing at the one
+// file on disk -- and a delete by either unlinked it out from under the other.
+// New uploads go under dna/<userId>/; this resolves both layouts so the files
+// already on disk keep serving.
+function resolveDnaFilePath(userId, filename) {
+  if (!filename) return null
+  const root = path.resolve(path.join(DATA_DIR, 'dna'))
+  const candidates = [
+    path.join(root, userId, path.basename(filename)),  // per-user layout
+    path.join(root, filename),                          // legacy flat layout
+  ]
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate)
+    if (!resolved.startsWith(root + path.sep)) continue  // never escape dna/
+    try {
+      if (fs.statSync(resolved).isFile()) return resolved
+    } catch {}
+  }
+  return null
+}
+
 app.post('/api/:userId/dna/upload', requireUser, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
   if (req.file.size > DNA_MAX_BYTES) {
@@ -1652,8 +1677,10 @@ app.post('/api/:userId/dna/upload', requireUser, upload.single('file'), (req, re
     return res.status(409).json({ error: `Duplicate: "${existing.original_filename}" was already uploaded` })
   }
 
+  // Basename only in the DB -- the directory is derived from the user, so an
+  // existing row stays valid under either layout.
   const storedFilename = `${fileHash}${ext}`
-  const dnaDir = path.join(DATA_DIR, 'dna')
+  const dnaDir = path.join(DATA_DIR, 'dna', req.params.userId)
   fs.mkdirSync(dnaDir, { recursive: true })
   fs.writeFileSync(path.join(dnaDir, storedFilename), req.file.buffer)
 
@@ -1670,8 +1697,8 @@ app.get('/api/:userId/dna/files/:id/download', requireUser, (req, res) => {
   const file = db.prepare(`SELECT * FROM dna_files WHERE id = ?`).get(req.params.id)
   if (!file) return res.status(404).json({ error: 'File not found' })
 
-  const filePath = path.join(DATA_DIR, 'dna', file.filename)
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing from disk' })
+  const filePath = resolveDnaFilePath(req.params.userId, file.filename)
+  if (!filePath) return res.status(404).json({ error: 'File missing from disk' })
 
   const downloadName = (file.original_filename || file.filename).replace(/[^\x20-\x7E]/g, '').replace(/"/g, '')
   const contentType = file.filename.endsWith('.txt') ? 'text/plain' : file.filename.endsWith('.html') ? 'text/html' : 'application/pdf'
@@ -1690,10 +1717,30 @@ app.delete('/api/:userId/dna/files/:id', requireUser, (req, res) => {
     db.prepare(`DELETE FROM dna_files WHERE id = ?`).run(req.params.id)
   })()
 
-  const filePath = path.join(DATA_DIR, 'dna', file.filename)
-  try { fs.unlinkSync(filePath) } catch {}
+  // Only remove bytes this profile exclusively owns: a file inside the user's
+  // own directory that no other row in this database still points at. A legacy
+  // flat file is left alone -- it may be any other profile's copy, and this DB
+  // cannot see theirs. That leaks disk until the layout is fully migrated,
+  // which is the safe direction for medical records.
+  const filePath = resolveDnaFilePath(req.params.userId, file.filename)
+  const userDir = path.resolve(path.join(DATA_DIR, 'dna', req.params.userId))
+  const stillReferenced = db
+    .prepare(`SELECT 1 FROM dna_files WHERE filename = ?`)
+    .get(file.filename)
 
-  res.json({ ok: true })
+  let removed = false
+  if (filePath && !stillReferenced && path.dirname(filePath) === userDir) {
+    try {
+      fs.unlinkSync(filePath)
+      removed = true
+    } catch (err) {
+      console.error(`[dna] ${req.params.userId}: unlink ${file.filename} failed — ${err.message}`)
+    }
+  } else if (filePath && !removed) {
+    console.log(`[dna] ${req.params.userId}: kept ${file.filename} on disk (legacy shared path or still referenced)`)
+  }
+
+  res.json({ ok: true, file_removed: removed })
 })
 
 // ─────────────────────────────────────────────────────────────

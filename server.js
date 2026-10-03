@@ -914,7 +914,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       for (const w of workouts) {
         const date = w.start?.slice(0, 10)
         if (!date) continue
-        if (!byDate[date]) byDate[date] = { count: 0, minutes: 0, z: [0, 0, 0, 0, 0] }
+        if (!byDate[date]) byDate[date] = { count: 0, minutes: 0, z: [0, 0, 0, 0, 0], hasHr: false }
         byDate[date].count++
         // w.duration is in seconds. Confirmed against the stored results rather than the
         // comment: 2026-07-18 has one workout and 27 stored minutes, 2026-07-19 one and
@@ -923,27 +923,66 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         // sample a minute.
         byDate[date].minutes += (w.duration ?? 0) / 60
 
+        // hr_z1_min…hr_z5_min are stored and rendered as MINUTES, so each sample has to
+        // be weighted by the wall-clock interval it covers rather than counted. The old
+        // `z[i]++` counted samples: the same 30-minute zone-2 workout exported at 5-second
+        // HR sampling gave hr_z2_min = 360 and at one-minute sampling gave 30. The stored
+        // values only look plausible because this export happens to run ~1 sample/minute.
+        //
+        // Keeping the field names (rather than renaming to hr_z*_samples) because the
+        // client compares them against TARGET_HR_MINS and labels the axis in minutes — a
+        // sample count has no goal to compare against and no fixed meaning across exports.
         if (maxHR && w.heartRateData?.length) {
-          for (const d of w.heartRateData) {
-            const pct = (d.Avg ?? 0) / maxHR * 100
-            if (pct >= 90) byDate[date].z[4]++
-            else if (pct >= 80) byDate[date].z[3]++
-            else if (pct >= 70) byDate[date].z[2]++
-            else if (pct >= 60) byDate[date].z[1]++
-            else if (pct >= 50) byDate[date].z[0]++
+          // A sample with no usable bpm is excluded outright. It used to fall through
+          // `(d.Avg ?? 0)` and get bucketed as 0% — i.e. silently dropped into no zone,
+          // but still counted toward the workout's sample total.
+          const samples = w.heartRateData
+            .map(d => ({
+              bpm: parseFloat(d.Avg ?? d.qty ?? d.Max ?? d.Min),
+              ts: Date.parse(d.date ?? d.start ?? d.startDate),
+            }))
+            .filter(s => !isNaN(s.bpm))
+            .sort((a, b) => (isNaN(a.ts) ? 0 : a.ts) - (isNaN(b.ts) ? 0 : b.ts))
+
+          // Fall back to an even split of the workout when timestamps are missing or a
+          // gap is implausible (a paused recording must not inflate a zone).
+          const MAX_GAP_MINUTES = 10
+          const evenSplit = samples.length && w.duration > 0 ? (w.duration / 60) / samples.length : 1
+
+          for (let i = 0; i < samples.length; i++) {
+            const { bpm, ts } = samples[i]
+            const next = samples[i + 1]
+            let mins = evenSplit
+            if (!isNaN(ts) && next && !isNaN(next.ts)) {
+              const gap = (next.ts - ts) / 60000
+              if (gap > 0 && gap <= MAX_GAP_MINUTES) mins = gap
+            }
+
+            const pct = bpm / maxHR * 100
+            if (pct >= 90) byDate[date].z[4] += mins
+            else if (pct >= 80) byDate[date].z[3] += mins
+            else if (pct >= 70) byDate[date].z[2] += mins
+            else if (pct >= 60) byDate[date].z[1] += mins
+            else if (pct >= 50) byDate[date].z[0] += mins
           }
+          if (samples.length) byDate[date].hasHr = true
         }
       }
-      for (const [date, { count, minutes, z }] of Object.entries(byDate)) {
+      for (const [date, { count, minutes, z, hasHr }] of Object.entries(byDate)) {
         upsert.run({ date, metric: 'workout_count', value: count, source: 'apple_health' })
         upsert.run({ date, metric: 'workout_minutes', value: Math.round(minutes), source: 'apple_health' })
         stats.imported += 2
-        z.forEach((mins, i) => {
-          if (mins > 0) {
-            upsert.run({ date, metric: `hr_z${i + 1}_min`, value: mins, source: 'apple_health' })
+        // Write every zone, including the empty ones, whenever the day has HR data at
+        // all. The old `if (mins > 0)` meant a zone that legitimately drops to zero on
+        // re-import kept the previous sync's stale non-zero value forever. Days with no
+        // HR data still write no zone rows, so "no zone data" stays distinguishable from
+        // "zero minutes in that zone".
+        if (hasHr) {
+          z.forEach((mins, i) => {
+            upsert.run({ date, metric: `hr_z${i + 1}_min`, value: Math.round(mins * 10) / 10, source: 'apple_health' })
             stats.imported++
-          }
-        })
+          })
+        }
       }
     }
   })

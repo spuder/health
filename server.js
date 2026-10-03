@@ -362,11 +362,13 @@ app.post('/api/:userId/markers/merge', requireUser, (req, res) => {
 
   let merged = 0, conflicts = 0
   const mergedDates = new Set()
+  const conflictDates = new Set()
 
   db.transaction(() => {
     for (const row of fromRows) {
       if (existsAtInto.get(row.date, into, row.source)) {
         conflicts++
+        conflictDates.add(row.date)
         continue
       }
       rename.run(into, row.id)
@@ -375,20 +377,28 @@ app.post('/api/:userId/markers/merge', requireUser, (req, res) => {
     }
 
     // Reference range / unit config: keep the target's if it already has one,
-    // otherwise carry the source's config over.
-    const intoHasConfig = db.prepare(`SELECT 1 FROM marker_configs WHERE metric = ?`).get(into)
-    if (intoHasConfig) {
-      db.prepare(`DELETE FROM marker_configs WHERE metric = ?`).run(from)
-    } else {
-      db.prepare(`UPDATE marker_configs SET metric = ? WHERE metric = ?`).run(into, from)
+    // otherwise carry the source's config over. Only once `from` is actually empty —
+    // if nothing moved, or conflicts left rows behind, those survivors still render
+    // under the old name and still need their own unit/range.
+    if (merged > 0 && conflicts === 0) {
+      const intoHasConfig = db.prepare(`SELECT 1 FROM marker_configs WHERE metric = ?`).get(into)
+      if (intoHasConfig) {
+        db.prepare(`DELETE FROM marker_configs WHERE metric = ?`).run(from)
+      } else {
+        db.prepare(`UPDATE marker_configs SET metric = ? WHERE metric = ?`).run(into, from)
+      }
     }
 
-    // Cosmetic: relabel the marker in lab-report snapshots for the reports we actually merged.
-    if (mergedDates.size) {
-      const placeholders = [...mergedDates].map(() => '?').join(',')
+    // Cosmetic: relabel the marker in lab-report snapshots for the reports we actually
+    // merged. Dates that still hold a `from` row are skipped — relabelling a half-merged
+    // date would claim `into` for a report whose own value is still under `from`, which
+    // also misdirects the date+marker fallback in DELETE /lab-reports/:id.
+    const relabelDates = [...mergedDates].filter(d => !conflictDates.has(d))
+    if (relabelDates.length) {
+      const placeholders = relabelDates.map(() => '?').join(',')
       const reports = db.prepare(
         `SELECT id, markers_json FROM lab_reports WHERE date IN (${placeholders})`
-      ).all(...mergedDates)
+      ).all(...relabelDates)
       const updateReport = db.prepare(`UPDATE lab_reports SET markers_json = ? WHERE id = ?`)
       for (const r of reports) {
         let names

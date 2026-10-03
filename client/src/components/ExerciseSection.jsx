@@ -52,11 +52,14 @@ function ExTooltip({ active, payload }) {
       <p className="text-[#64748b] text-xs mb-1">
         {new Date(d.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
       </p>
-      {d.exercise_minutes != null && (
-        <p className="text-white text-base font-semibold">{d.exercise_minutes} min</p>
+      {d.ex_minutes != null && (
+        <p className="text-white text-base font-semibold">{d.ex_minutes} min</p>
       )}
       {d.workout_count != null && (
-        <p className="text-[#64748b] text-xs">{d.workout_count} session{d.workout_count !== 1 ? 's' : ''}</p>
+        <p className="text-[#64748b] text-xs">
+          {d.workout_count} session{d.workout_count !== 1 ? 's' : ''}
+          {d.workout_minutes != null && ` · ${d.workout_minutes} min recorded`}
+        </p>
       )}
       {d.hr_hard_minutes != null && (
         <p className="text-red-400 text-xs mt-0.5">{d.hr_hard_minutes} min HR zone</p>
@@ -91,17 +94,26 @@ const ZONES = [
 export default function ExerciseSection({ data, userId, onRefresh }) {
   const [showLog, setShowLog] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
-  const entries = data?.entries ?? []
+  // `exercise_minutes` is Apple's exercise-ring time (or a manually logged session);
+  // `workout_minutes` is the summed duration of recorded workouts. They used to collide
+  // on one metric name, so the chart flip-flopped between two incompatible quantities.
+  // The chart stays on the ring figure and falls back to workout minutes only when there
+  // is no ring figure at all for that day.
+  const entries = (data?.entries ?? []).map(e => ({
+    ...e,
+    ex_minutes: e.exercise_minutes ?? e.workout_minutes ?? null,
+  }))
 
   const cutoff7 = since(7)
   const last7   = entries.filter(e => new Date(e.date + 'T00:00:00') >= cutoff7)
   const last30  = entries.slice(-30)
 
   const workoutsThisWeek = last7.reduce((s, e) => s + (e.workout_count ?? 0), 0)
+  const workoutMinsThisWeek = last7.reduce((s, e) => s + (e.workout_minutes ?? 0), 0)
 
   const today = new Date().toISOString().slice(0, 10)
   const todayEntry = entries.find(e => e.date === today)
-  const todayMins = todayEntry?.exercise_minutes ?? null
+  const todayMins = todayEntry?.ex_minutes ?? null
 
   // Per-zone avg over last 30 days (days that have any zone data)
   const zoneDays = last30.filter(e => ZONES.some(z => e[z.key] != null))
@@ -141,7 +153,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
           label="Sessions This Week"
           value={workoutsThisWeek || null}
           unit="sessions"
-          sublabel={`${last7.filter(e => e.workout_count).length} days active`}
+          sublabel={`${last7.filter(e => e.workout_count).length} days active${workoutMinsThisWeek ? ` · ${Math.round(workoutMinsThisWeek)} min recorded` : ''}`}
           color="#f97316"
         />
         <StatCard
@@ -184,7 +196,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
       {/* Exercise minutes bar chart */}
       <div className="bg-[#131d2e] border border-[#243450] rounded-2xl p-6 mb-4">
         <p className="text-white text-sm font-medium mb-4">Exercise Minutes / Day</p>
-        {recent.filter(e => e.exercise_minutes != null).length === 0 ? (
+        {recent.filter(e => e.ex_minutes != null).length === 0 ? (
           <div className="flex items-center justify-center h-40 text-[#374d6c] text-sm">
             No exercise data — log a session or sync Apple Health
           </div>
@@ -209,15 +221,15 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
               />
               <Tooltip content={<ExTooltip />} />
               <ReferenceLine y={TARGET_MINUTES} stroke="#f97316" strokeDasharray="4 4" strokeOpacity={0.4} strokeWidth={1} />
-              <Bar dataKey="exercise_minutes" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+              <Bar dataKey="ex_minutes" radius={[3, 3, 0, 0]} isAnimationActive={false}>
                 {recent.map((e, i) => (
-                  <Cell key={i} fill={exColor(e.exercise_minutes ?? 0)} fillOpacity={0.85} />
+                  <Cell key={i} fill={exColor(e.ex_minutes ?? 0)} fillOpacity={0.85} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         )}
-        {recent.filter(e => e.exercise_minutes != null).length > 0 && (
+        {recent.filter(e => e.ex_minutes != null).length > 0 && (
           <div className="flex items-center gap-4 mt-3 text-[10px] text-[#475569]">
             <div className="flex items-center gap-1">
               <div className="w-4 h-px border-t border-dashed border-orange-500 opacity-50" />

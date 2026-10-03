@@ -121,8 +121,12 @@ const BODY_METRICS = [
   'lean_mass', 'visceral_fat', 'bmr', 'total_body_water',
 ]
 
+// Include list for GET /exercise. `GET /blood` is the complement of the four section
+// lists, so anything a client reads but that is missing here silently shows up in Labs —
+// which is exactly what happened to hr_hard_minutes (written by POST /exercise, read by
+// ExerciseSection) until it was added below.
 const EXERCISE_METRICS = [
-  'exercise_minutes', 'workout_count',
+  'exercise_minutes', 'workout_minutes', 'workout_count', 'hr_hard_minutes',
   'hr_z1_min', 'hr_z2_min', 'hr_z3_min', 'hr_z4_min', 'hr_z5_min',
 ]
 
@@ -563,10 +567,76 @@ const HAE_METRIC_MAP = {
   sleep_analysis_core_sleep: null,
 }
 
-function convertUnit(haeMetricName, qty, units) {
-  if (haeMetricName === 'body_mass' && units === 'kg') return Math.round(qty * 2.20462 * 10) / 10
-  if (haeMetricName?.includes('sleep') && units === 'min') return Math.round(qty / 60 * 100) / 100
-  return Math.round(qty * 10) / 10
+// How several samples on the same calendar day collapse into the one row that
+// UNIQUE(date, metric, source) allows, keyed on the MAPPED metric name.
+//
+//   'sum'  — cumulative over the day; a day's value is the total of its samples.
+//            Apple ships these as ~1,440 one-minute buckets, so this is the one that
+//            matters: without it the stored value was a single minute of the day.
+//   'avg'  — an instantaneous reading sampled continuously; the day's representative
+//            value is the mean of its samples.
+//   'last' — already a once-a-day figure, or a deliberate discrete measurement; the
+//            newest sample by timestamp supersedes the others.
+//
+// Anything not listed — including unmapped HAE names, which pass through as-is — gets
+// HAE_AGGREGATION_DEFAULT. 'avg' is the safe default: an unknown metric that should have
+// been summed comes out low but in the right ballpark, whereas summing an unknown
+// instantaneous metric produces a number orders of magnitude too large with nothing to
+// flag it as wrong.
+const HAE_AGGREGATION = {
+  // Cumulative
+  active_calories: 'sum',
+  resting_calories: 'sum',
+  steps: 'sum',
+  distance_miles: 'sum',
+  exercise_minutes: 'sum',
+  time_in_daylight: 'sum',
+  // Sleep stage durations only reach this path when HAE sends sleep_analysis_* as plain
+  // qty points; they are stage lengths, so a night's figure is their total. (The raw
+  // per-stage interval and compound nightly paths above never get here.)
+  sleep_hours: 'sum',
+  deep_sleep_hours: 'sum',
+  rem_sleep_hours: 'sum',
+  core_sleep_hours: 'sum',
+  awake_hours: 'sum',
+  // Instantaneous, sampled many times a day → mean
+  heart_rate: 'avg',
+  hrv: 'avg',
+  blood_oxygen: 'avg',
+  respiratory_rate: 'avg',
+  blood_glucose: 'avg',
+  bp_systolic: 'avg',
+  bp_diastolic: 'avg',
+  body_temp_f: 'avg',
+  wrist_temp_c: 'avg',
+  physical_effort: 'avg',
+  // One figure per day already, or a discrete measurement → newest wins
+  weight: 'last',
+  bmi: 'last',
+  body_fat: 'last',
+  lean_mass: 'last',
+  resting_heart_rate: 'last',
+  vo2_max: 'last',
+}
+const HAE_AGGREGATION_DEFAULT = 'avg'
+
+// Linear HAE→stored-unit scale, keyed on the MAPPED metric name rather than the HAE one.
+// Two HAE names map to `weight` (`body_mass` and the `weight_body_mass` alias), so a test
+// on the HAE name only catches one of them — an export using the alias with units 'kg'
+// would store ~80 next to the ~176 pound values already in the table, on the same axis.
+// Scaling is kept separate from rounding so a day's samples can be accumulated at full
+// precision and rounded once, instead of rounding every one-minute sample and summing the
+// error.
+function unitScale(metricName, units) {
+  if (metricName === 'weight' && units === 'kg') return 2.20462
+  if (metricName?.includes('sleep') && units === 'min') return 1 / 60
+  return 1
+}
+
+// Decimals a converted value is stored at — sleep hours derived from minutes need two.
+function roundValue(metricName, units, value) {
+  const factor = metricName?.includes('sleep') && units === 'min' ? 100 : 10
+  return Math.round(value * factor) / factor
 }
 
 app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
@@ -609,6 +679,12 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   }
 
   const importAll = db.transaction(() => {
+    // Accumulator for the generic `qty` path, keyed `${date}|${metric}`. It lives outside
+    // the metrics loop on purpose: two HAE names can map onto the same metric in one
+    // payload (`active_energy` and `active_energy_burned` both → active_calories), and
+    // their samples belong in the same daily bucket.
+    const daily = new Map()
+
     for (const { name, units, data = [] } of metrics) {
       const mappedName = name in HAE_METRIC_MAP ? HAE_METRIC_MAP[name] : name
       if (mappedName === null) { stats.skipped += data.length; continue }  // explicitly ignored metric
@@ -698,8 +774,13 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         }
 
         for (const night of byNight.values()) {
+          // A night with no asleep time at all is not a night; skip it rather than
+          // writing a row of zeros over a good one.
+          const asleepHours = night.core + night.deep + night.rem + night.asleep
+          if (!(asleepHours > 0)) { stats.skipped++; continue }
+
           const sleepFields = [
-            ['sleep_hours', night.core + night.deep + night.rem + night.asleep],
+            ['sleep_hours', asleepHours],
             ['deep_sleep_hours', night.deep],
             ['rem_sleep_hours', night.rem],
             ['core_sleep_hours', night.core],
@@ -709,7 +790,11 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           ]
           let stored = 0
           for (const [metric, value] of sleepFields) {
-            if (value != null && !isNaN(value) && value > 0) {
+            // The night is known-good by this point, so write every field it has,
+            // including the zero ones. The old `value > 0` meant a night with no deep
+            // sleep kept the previous sync's deep figure, and a bedtime or wake time of
+            // exactly 00:00 was dropped entirely.
+            if (value != null && !isNaN(value) && value >= 0) {
               upsert.run({ date: night.ownerDate, metric, value: Math.round(value * 100) / 100, source: night.src, notes: null })
               stored++
             }
@@ -738,6 +823,8 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           // Skip naps — only process sessions starting between 7 PM and 2 AM
           if (!isNaN(startH) && startH >= 2 && startH < 19) { stats.skipped++; continue }
           const src = point.source ?? 'apple_health'
+          // Same as the raw-interval path: a night with no total sleep is not a night.
+          if (!(parseFloat(point.totalSleep) > 0)) { stats.skipped++; continue }
           const sleepFields = [
             { field: 'totalSleep', metric: 'sleep_hours' },
             { field: 'deep', metric: 'deep_sleep_hours' },
@@ -750,7 +837,9 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           let stored = 0
           for (const { field, metric, parse } of sleepFields) {
             const val = parse ? parse(point[field]) : parseFloat(point[field])
-            if (!isNaN(val) && (parse ? true : val > 0)) {
+            // `val > 0` for the stage fields had the same effect here as in the
+            // raw-interval path: a zero-deep-sleep night kept the previous sync's figure.
+            if (!isNaN(val)) {
               upsert.run({ date, metric, value: Math.round(val * 100) / 100, source: src, notes: null })
               stored++
             }
@@ -761,20 +850,86 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         continue
       }
 
+      // One HAE data point is a single sample, not a day. A cumulative metric such as
+      // active_energy_burned arrives as ~1,440 one-minute buckets per day; writing each
+      // one straight to (date, metric, 'apple_health') meant every sample overwrote the
+      // previous one and the stored "daily" value was whichever sample happened to be
+      // last in the array — which is why active_calories reads 0.0–1.2 per day against a
+      // real ~500 kcal. Accumulate per (date, metric) here and collapse with the metric's
+      // HAE_AGGREGATION policy after the loop.
       for (const point of data) {
         const date = point.date?.slice(0, 10)
         if (!date) { stats.skipped++; continue }
 
-        const raw = parseFloat(point.qty ?? point.Avg ?? point.Max ?? point.Min)
+        const qty = parseFloat(point.qty)
+        const raw = isNaN(qty) ? parseFloat(point.Avg ?? point.Max ?? point.Min) : qty
         if (isNaN(raw)) { stats.skipped++; continue }
 
-        const value = convertUnit(name, raw, units)
-        upsert.run({ date, metric: metricName, value, source: 'apple_health' })
-        stats.imported++
+        const key = `${date}|${metricName}`
+        if (!daily.has(key)) {
+          daily.set(key, {
+            date,
+            metric: metricName,
+            units,
+            policy: metricName in HAE_AGGREGATION ? HAE_AGGREGATION[metricName] : HAE_AGGREGATION_DEFAULT,
+            total: 0, count: 0,       // every sample, for 'avg'
+            sum: 0, sumCount: 0,      // qty samples only, for 'sum'
+            last: null, lastTs: NaN,  // newest by timestamp, for 'last'
+            max: -Infinity,
+          })
+        }
+        const acc = daily.get(key)
+        // Scale per sample so a payload mixing units for one metric still accumulates
+        // coherently; rounding happens once, at flush.
+        const value = raw * unitScale(metricName, units)
+        acc.total += value
+        acc.count++
+        if (value > acc.max) acc.max = value
+        // Fall back to array order when the timestamp is unparseable, which is what the
+        // old overwrite-per-point behaviour effectively did.
+        const ts = Date.parse(point.date)
+        if (acc.last === null || isNaN(ts) || isNaN(acc.lastTs) || ts >= acc.lastTs) {
+          acc.last = value
+          acc.lastTs = ts
+        }
+        // An Avg/Min/Max point is already a summary over some window, so it never feeds a
+        // 'sum' — a day of per-window averages has no meaningful total.
+        if (!isNaN(qty)) { acc.sum += value; acc.sumCount++ }
       }
     }
 
-    // Aggregate workouts → workout_count + exercise_minutes + HR zones per day
+    // Collapse the accumulated samples into the one row per (date, metric) that the
+    // UNIQUE constraint allows.
+    for (const acc of daily.values()) {
+      let value
+      if (acc.policy === 'sum') {
+        // No qty samples at all means HAE pre-aggregated the day for us; keep the largest
+        // of those summaries rather than inventing a total out of per-window averages.
+        value = acc.sumCount ? acc.sum : acc.max
+      } else if (acc.policy === 'avg') {
+        value = acc.total / acc.count
+      } else {
+        value = acc.last
+      }
+      upsert.run({
+        date: acc.date,
+        metric: acc.metric,
+        value: roundValue(acc.metric, acc.units, value),
+        source: 'apple_health',
+      })
+      stats.imported++
+    }
+
+    // Aggregate workouts → workout_count + workout_minutes + HR zones per day.
+    //
+    // This used to write `exercise_minutes`, which the metrics loop above also writes
+    // from apple_exercise_time. Same (date, metric, source) → last writer won, so the
+    // value flip-flopped between syncs depending on which payload arrived last: of the
+    // dates in this DB that have a workout_count, most read exercise_minutes = 1.0 (a
+    // single one-minute apple_exercise_time sample) while a handful read 13/27/60/68 (the
+    // workout-derived sum). The Exercise chart was plotting two incompatible quantities —
+    // Apple's exercise-ring time and time spent in recorded workouts — so they get
+    // separate metrics now.
     if (workouts.length) {
       const age = req.user.birth_year ? new Date().getFullYear() - req.user.birth_year : null
       const maxHR = age ? 220 - age : null
@@ -782,31 +937,75 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       for (const w of workouts) {
         const date = w.start?.slice(0, 10)
         if (!date) continue
-        if (!byDate[date]) byDate[date] = { count: 0, minutes: 0, z: [0, 0, 0, 0, 0] }
+        if (!byDate[date]) byDate[date] = { count: 0, minutes: 0, z: [0, 0, 0, 0, 0], hasHr: false }
         byDate[date].count++
-        byDate[date].minutes += (w.duration ?? 0) / 60  // duration is in seconds
+        // w.duration is in seconds. Confirmed against the stored results rather than the
+        // comment: 2026-07-18 has one workout and 27 stored minutes, 2026-07-19 one and
+        // 13 — minutes-valued durations would need a 27-hour workout to produce that, and
+        // the per-day HR sample counts (25 and 7) track those figures at roughly one
+        // sample a minute.
+        byDate[date].minutes += (w.duration ?? 0) / 60
 
+        // hr_z1_min…hr_z5_min are stored and rendered as MINUTES, so each sample has to
+        // be weighted by the wall-clock interval it covers rather than counted. The old
+        // `z[i]++` counted samples: the same 30-minute zone-2 workout exported at 5-second
+        // HR sampling gave hr_z2_min = 360 and at one-minute sampling gave 30. The stored
+        // values only look plausible because this export happens to run ~1 sample/minute.
+        //
+        // Keeping the field names (rather than renaming to hr_z*_samples) because the
+        // client compares them against TARGET_HR_MINS and labels the axis in minutes — a
+        // sample count has no goal to compare against and no fixed meaning across exports.
         if (maxHR && w.heartRateData?.length) {
-          for (const d of w.heartRateData) {
-            const pct = (d.Avg ?? 0) / maxHR * 100
-            if (pct >= 90) byDate[date].z[4]++
-            else if (pct >= 80) byDate[date].z[3]++
-            else if (pct >= 70) byDate[date].z[2]++
-            else if (pct >= 60) byDate[date].z[1]++
-            else if (pct >= 50) byDate[date].z[0]++
+          // A sample with no usable bpm is excluded outright. It used to fall through
+          // `(d.Avg ?? 0)` and get bucketed as 0% — i.e. silently dropped into no zone,
+          // but still counted toward the workout's sample total.
+          const samples = w.heartRateData
+            .map(d => ({
+              bpm: parseFloat(d.Avg ?? d.qty ?? d.Max ?? d.Min),
+              ts: Date.parse(d.date ?? d.start ?? d.startDate),
+            }))
+            .filter(s => !isNaN(s.bpm))
+            .sort((a, b) => (isNaN(a.ts) ? 0 : a.ts) - (isNaN(b.ts) ? 0 : b.ts))
+
+          // Fall back to an even split of the workout when timestamps are missing or a
+          // gap is implausible (a paused recording must not inflate a zone).
+          const MAX_GAP_MINUTES = 10
+          const evenSplit = samples.length && w.duration > 0 ? (w.duration / 60) / samples.length : 1
+
+          for (let i = 0; i < samples.length; i++) {
+            const { bpm, ts } = samples[i]
+            const next = samples[i + 1]
+            let mins = evenSplit
+            if (!isNaN(ts) && next && !isNaN(next.ts)) {
+              const gap = (next.ts - ts) / 60000
+              if (gap > 0 && gap <= MAX_GAP_MINUTES) mins = gap
+            }
+
+            const pct = bpm / maxHR * 100
+            if (pct >= 90) byDate[date].z[4] += mins
+            else if (pct >= 80) byDate[date].z[3] += mins
+            else if (pct >= 70) byDate[date].z[2] += mins
+            else if (pct >= 60) byDate[date].z[1] += mins
+            else if (pct >= 50) byDate[date].z[0] += mins
           }
+          if (samples.length) byDate[date].hasHr = true
         }
       }
-      for (const [date, { count, minutes, z }] of Object.entries(byDate)) {
+      for (const [date, { count, minutes, z, hasHr }] of Object.entries(byDate)) {
         upsert.run({ date, metric: 'workout_count', value: count, source: 'apple_health' })
-        upsert.run({ date, metric: 'exercise_minutes', value: Math.round(minutes), source: 'apple_health' })
+        upsert.run({ date, metric: 'workout_minutes', value: Math.round(minutes), source: 'apple_health' })
         stats.imported += 2
-        z.forEach((mins, i) => {
-          if (mins > 0) {
-            upsert.run({ date, metric: `hr_z${i + 1}_min`, value: mins, source: 'apple_health' })
+        // Write every zone, including the empty ones, whenever the day has HR data at
+        // all. The old `if (mins > 0)` meant a zone that legitimately drops to zero on
+        // re-import kept the previous sync's stale non-zero value forever. Days with no
+        // HR data still write no zone rows, so "no zone data" stays distinguishable from
+        // "zero minutes in that zone".
+        if (hasHr) {
+          z.forEach((mins, i) => {
+            upsert.run({ date, metric: `hr_z${i + 1}_min`, value: Math.round(mins * 10) / 10, source: 'apple_health' })
             stats.imported++
-          }
-        })
+          })
+        }
       }
     }
   })
@@ -820,7 +1019,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// Exercise  (metrics: exercise_minutes, workout_count, hr_hard_minutes)
+// Exercise  (metrics: exercise_minutes, workout_minutes, workout_count, hr_hard_minutes)
 // ─────────────────────────────────────────────────────────────
 
 app.get('/api/:userId/exercise', requireUser, (req, res) => {

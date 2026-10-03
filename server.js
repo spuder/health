@@ -47,9 +47,16 @@ function pivotMetrics(rows) {
   const byDate = {}
   for (const row of rows) {
     if (!byDate[row.date]) byDate[row.date] = { date: row.date }
-    byDate[row.date][row.metric] = row.value
-    byDate[row.date].source = row.source
-    byDate[row.date].notes = row.notes
+    const entry = byDate[row.date]
+    entry[row.metric] = row.value
+
+    // `source` and `notes` describe the date, not whichever metric happened to be
+    // iterated last. Assigning both unconditionally meant the pivoted row reported
+    // an arbitrary source (LabsSection renders it), and -- worse -- that a later
+    // metric carrying no note erased a real note typed against an earlier one.
+    if (entry.source == null) entry.source = row.source
+    else if (entry.source !== row.source && entry.source !== 'mixed') entry.source = 'mixed'
+    if (entry.notes == null && row.notes != null) entry.notes = row.notes
   }
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
 }

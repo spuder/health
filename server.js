@@ -66,16 +66,62 @@ function normalizeMetricKey(raw) {
 // Users
 // ─────────────────────────────────────────────────────────────
 
+// A user id is a filesystem name (DATA_DIR/<id>.db) and an Express path
+// segment, so it has to be non-empty and URL-safe. The old one-liner slug
+// could return the empty string for any name without ASCII alphanumerics
+// ("李雷", "!!!"): the duplicate check passed, getDb('') created `data/.db`,
+// and then no route could ever match the empty `:userId`, so every subsequent
+// call for that profile 404'd with no way to repair it from the UI.
+//
+// Accents are folded rather than dropped, so "José" is `jose` and not `jos`.
+const MAX_USER_ID_LEN = 64
+
+function slugifyUserId(name) {
+  return name
+    .normalize('NFKD')             // split accented letters into base + mark
+    .replace(/[\u0300-\u036f]/g, '')  // drop the combining marks ("e" + accent -> "e")
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_USER_ID_LEN)
+    .replace(/-+$/, '')            // the slice may have left a trailing dash
+}
+
+// Names written entirely in a non-Latin script slug to nothing. Rejecting them
+// would mean this dashboard simply cannot hold a Chinese or Arabic name, so
+// instead they get a generated handle: the id is only an internal key, and the
+// display name is stored verbatim in `name` and is what the UI renders.
+function fallbackUserId(users) {
+  const taken = new Set(users.map(u => u.id))
+  if (!taken.has('user')) return 'user'
+  for (let n = 2; ; n++) {
+    const candidate = `user-${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+}
+
 app.get('/api/users', (req, res) => {
   res.json(readUsers())
 })
 
 app.post('/api/users', (req, res) => {
   const { name, color, initials, height_inches, birth_year } = req.body
-  if (!name) return res.status(400).json({ error: 'name is required' })
+  if (typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'name is required' })
+  }
 
-  const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
   const users = readUsers()
+  const slug = slugifyUserId(name.trim())
+
+  // Only the generated-handle path can collide on the display name instead of
+  // the slug, so that's the only place it needs checking.
+  if (!slug && users.find(u => u.name === name.trim())) {
+    return res.status(409).json({ error: `A profile named '${name.trim()}' already exists` })
+  }
+
+  const id = slug || fallbackUserId(users)
 
   if (users.find(u => u.id === id)) {
     return res.status(409).json({ error: `User '${id}' already exists` })

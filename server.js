@@ -944,6 +944,69 @@ InBody body-composition scans:
   bmr                  → kcal
   total_body_water     → liters`
 
+// ── Lab file storage ──────────────────────────────────────────
+// New uploads go to DATA_DIR/pdfs/<userId>/<hash><ext>. The old flat
+// DATA_DIR/pdfs/<name> layout was shared by every user, so two people
+// importing the same family lab PDF got one file on disk under one name and
+// either one's delete unlinked it out from under the other.
+//
+// Reads have to stay compatible with three legacy flat names already on disk
+// ('ocr_import', '<user>_<date>_<ts>.pdf', '<hash>.PDF'), so lookups try the
+// per-user path first and then fall back to the flat one.
+
+function labPdfDir(userId) {
+  return path.join(DATA_DIR, 'pdfs', userId)
+}
+
+function resolveLabPdfPath(userId, filename) {
+  if (!filename) return null
+  const root = path.resolve(path.join(DATA_DIR, 'pdfs'))
+  const candidates = [
+    path.join(root, userId, path.basename(filename)),  // per-user layout
+    path.join(root, filename),                          // legacy flat layout
+  ]
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate)
+    if (!resolved.startsWith(root + path.sep)) continue  // never escape pdfs/
+    try {
+      if (fs.statSync(resolved).isFile()) return resolved
+    } catch {}
+  }
+  return null
+}
+
+// A file is written at preview time, before any lab_reports row exists, so an
+// abandoned preview leaves an orphaned medical PDF on disk that no UI can
+// remove. Sweep this user's own upload dir whenever they import again:
+// unreferenced files older than a day, i.e. long past any open preview.
+// Legacy flat files in pdfs/ are deliberately never swept — they can belong to
+// another user's report, which this DB cannot see.
+const ORPHAN_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000
+
+function sweepAbandonedUploads(db, userId) {
+  let entries
+  try { entries = fs.readdirSync(labPdfDir(userId)) } catch { return }
+  if (!entries.length) return
+
+  const referenced = new Set(
+    db.prepare(`SELECT filename FROM lab_reports WHERE filename IS NOT NULL`)
+      .all()
+      .map(r => path.basename(r.filename))
+  )
+  const cutoff = Date.now() - ORPHAN_UPLOAD_TTL_MS
+
+  for (const name of entries) {
+    if (referenced.has(name)) continue
+    const filePath = path.join(labPdfDir(userId), name)
+    try {
+      const stat = fs.statSync(filePath)
+      if (!stat.isFile() || stat.mtimeMs > cutoff) continue
+      fs.unlinkSync(filePath)
+      console.log(`[labs-pdf] Swept abandoned upload ${userId}/${name}`)
+    } catch {}
+  }
+}
+
 app.get('/api/:userId/lab-reports', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
   const reports = db.prepare(`SELECT * FROM lab_reports ORDER BY date DESC, created_at DESC`).all()
@@ -955,10 +1018,12 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
   const report = db.prepare(`SELECT * FROM lab_reports WHERE id = ?`).get(req.params.id)
   if (!report) return res.status(404).json({ error: 'Report not found' })
 
-  const pdfPath = path.join(DATA_DIR, 'pdfs', report.filename)
-  if (!fs.existsSync(pdfPath)) return res.status(404).json({ error: 'PDF file not found' })
+  const pdfPath = resolveLabPdfPath(req.params.userId, report.filename)
+  if (!pdfPath) return res.status(404).json({ error: 'PDF file not found' })
 
-  const downloadName = (report.original_filename || report.filename).replace(/[^\x20-\x7E]/g, '').replace(/"/g, '')
+  const downloadName = path.basename(report.original_filename || report.filename)
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/"/g, '')
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`)
   fs.createReadStream(pdfPath).pipe(res)
@@ -974,33 +1039,87 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
   let markerNames = []
   try { markerNames = JSON.parse(report.markers_json ?? '[]') } catch {}
 
-  const deletedMetrics = db.transaction(() => {
+  // Other rows that point at the same stored file. The UNIQUE index is on
+  // file_hash (NULL for legacy rows), not filename, so siblings genuinely
+  // share a name — reports 1-3 in spencer.db are all 'ocr_import'.
+  const fileSiblings = report.filename
+    ? db.prepare(`SELECT count(*) AS n FROM lab_reports WHERE id != ? AND filename = ?`)
+        .get(report.id, report.filename).n
+    : 0
+
+  const result = db.transaction(() => {
     // Metrics explicitly stamped with this report's id.
     const linked = db.prepare(`DELETE FROM metrics WHERE lab_report_id = ?`).run(report.id)
 
     // Legacy fallback for reports imported before lab_report_id existed —
-    // match by date + metric name, but only among still-unlinked rows so we
-    // never touch a value another (properly linked) report owns.
+    // match by date + metric name among still-unlinked rows.
+    //
+    // That used to be justified with "no other (properly linked) report owns
+    // these", which only holds if the other owner IS linked. In the real
+    // databases nothing was: every pdf_import row predates the column. And
+    // reports share dates constantly (three InBody scans on 2026-05-15, seven
+    // panels on 2026-05-18), where UNIQUE(date, metric, source) means all of
+    // them read one single row — so deleting one wiped the values its siblings
+    // still list, leaving them in the UI with empty charts and no undo.
+    //
+    // So: only claim markers that no other report on this date lists. If every
+    // marker is contested nothing is deleted by name, and the rows stay until
+    // the db.js backfill can attribute them (or forever, if it never can).
     let legacyChanges = 0
+    let skipped = []
     if (markerNames.length) {
-      const placeholders = markerNames.map(() => '?').join(',')
-      legacyChanges = db.prepare(`
-        DELETE FROM metrics
-        WHERE source = 'pdf_import' AND lab_report_id IS NULL AND date = ? AND metric IN (${placeholders})
-      `).run(report.date, ...markerNames).changes
+      const shared = new Set()
+      const sameDate = db.prepare(`SELECT markers_json FROM lab_reports WHERE id != ? AND date = ?`)
+        .all(report.id, report.date)
+      for (const other of sameDate) {
+        let markers = []
+        try { markers = JSON.parse(other.markers_json ?? '[]') } catch {}
+        if (Array.isArray(markers)) for (const metric of markers) shared.add(metric)
+      }
+
+      const exclusive = markerNames.filter(m => !shared.has(m))
+      skipped = markerNames.filter(m => shared.has(m))
+
+      if (exclusive.length) {
+        const placeholders = exclusive.map(() => '?').join(',')
+        legacyChanges = db.prepare(`
+          DELETE FROM metrics
+          WHERE source = 'pdf_import' AND lab_report_id IS NULL AND date = ? AND metric IN (${placeholders})
+        `).run(report.date, ...exclusive).changes
+      }
     }
 
+    // Reference ranges this import wrote. Removing them lets GET /blood fall
+    // back to the hardcoded BLOOD_MARKERS baseline instead of judging every
+    // historical value of the marker against a range from a deleted report.
+    const ranges = db.prepare(`DELETE FROM marker_configs WHERE lab_report_id = ?`).run(report.id)
+
     db.prepare(`DELETE FROM lab_reports WHERE id = ?`).run(report.id)
-    return linked.changes + legacyChanges
+    return { deletedMetrics: linked.changes + legacyChanges, deletedRanges: ranges.changes, skipped }
   })()
 
-  if (report.filename) {
-    const filePath = path.join(DATA_DIR, 'pdfs', report.filename)
-    fs.unlink(filePath, () => {})
+  // Only a file under pdfs/<userId>/ is provably this user's. A legacy flat
+  // path can be the very same file another user's report points at (same
+  // sha256, both imported it) and this DB cannot see theirs, so leave it.
+  const storedPath = resolveLabPdfPath(req.params.userId, report.filename)
+  const ownDir = path.resolve(labPdfDir(req.params.userId)) + path.sep
+  if (storedPath && !fileSiblings && storedPath.startsWith(ownDir)) {
+    fs.unlink(storedPath, () => {})
+  } else if (storedPath) {
+    const why = fileSiblings ? `${fileSiblings} other report(s) reference it` : 'shared legacy path'
+    console.log(`[lab-reports] Kept ${report.filename} on disk — ${why}`)
   }
 
-  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${deletedMetrics} metrics removed`)
-  res.json({ ok: true, deleted_metrics: deletedMetrics })
+  if (result.skipped.length) {
+    console.log(`[lab-reports] Report ${report.id}: left ${result.skipped.length} unlinked legacy metric(s) in place — also listed by another report on ${report.date}: ${result.skipped.join(', ')}`)
+  }
+  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${result.deletedMetrics} metrics, ${result.deletedRanges} ranges removed`)
+  res.json({
+    ok: true,
+    deleted_metrics: result.deletedMetrics,
+    deleted_ranges: result.deletedRanges,
+    kept_shared_metrics: result.skipped,
+  })
 })
 
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {
@@ -1020,10 +1139,13 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
 
   // ── 0b. Persist the uploaded file to disk ─────────────────
   const ext = path.extname(req.file.originalname || '') || (isCsv ? '.csv' : isPng ? '.png' : '.pdf')
+  // Per-user directory — see labPdfDir(). The DB keeps the bare basename, so
+  // resolveLabPdfPath() is what maps a row to a file in either layout.
   const storedFilename = `${fileHash}${ext}`
-  const pdfsDir = path.join(DATA_DIR, 'pdfs')
-  fs.mkdirSync(pdfsDir, { recursive: true })
-  fs.writeFileSync(path.join(pdfsDir, storedFilename), req.file.buffer)
+  const userPdfsDir = labPdfDir(req.params.userId)
+  fs.mkdirSync(userPdfsDir, { recursive: true })
+  sweepAbandonedUploads(db0, req.params.userId)
+  fs.writeFileSync(path.join(userPdfsDir, storedFilename), req.file.buffer)
 
   // ── 1. Send file to Claude ────────────────────────────────
   let parsed
@@ -1051,12 +1173,29 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
       throw new Error('Response too large — try a shorter file or split it into sections')
     }
 
+    // A refusal is an HTTP 200 with no text block at all, which otherwise
+    // surfaces as the misleading "Empty response from AI". stop_details is
+    // populated only for this stop_reason.
+    if (msg.stop_reason === 'refusal') {
+      const why = msg.stop_details?.explanation || msg.stop_details?.category || 'no explanation given'
+      throw new Error(`The AI declined to parse this file: ${why}`)
+    }
+
     // Opus 5 thinks by default, so content[0] is a (text-less) thinking block,
-    // not the answer — pull the first actual text block instead of index 0.
-    const raw = msg.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    // not the answer. Join every text block rather than taking the first one:
+    // the answer can arrive split across blocks, or behind a preamble block.
+    const raw = msg.content.filter(b => b.type === 'text').map(b => b.text ?? '').join('').trim()
     if (!raw) throw new Error('Empty response from AI')
     const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    parsed = JSON.parse(jsonStr)
+    try {
+      parsed = JSON.parse(jsonStr)
+    } catch {
+      // Prose around the JSON ("Here is the JSON:") — take the outermost object.
+      const start = jsonStr.indexOf('{')
+      const end = jsonStr.lastIndexOf('}')
+      if (start === -1 || end <= start) throw new Error('AI response was not JSON')
+      parsed = JSON.parse(jsonStr.slice(start, end + 1))
+    }
   } catch (err) {
     console.error('[labs-pdf] Claude parse error:', err)
     return res.status(500).json({ error: `AI parsing failed: ${err.message}` })
@@ -1096,17 +1235,30 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
       lab_report_id = excluded.lab_report_id
   `)
 
+  // optimal_low/optimal_high are deliberately absent from this statement (both
+  // on insert and on conflict): they only ever come from the hardcoded
+  // BLOOD_MARKERS table, never from a lab's printed range.
   const rangeUpsert = db.prepare(`
-    INSERT INTO marker_configs (metric, range_low, range_high, source, updated_at)
-    VALUES (@metric, @range_low, @range_high, 'pdf_import', datetime('now'))
+    INSERT INTO marker_configs (metric, range_low, range_high, source, lab_report_id, updated_at)
+    VALUES (@metric, @range_low, @range_high, 'pdf_import', @lab_report_id, datetime('now'))
     ON CONFLICT(metric) DO UPDATE SET
-      range_low  = COALESCE(excluded.range_low,  range_low),
-      range_high = COALESCE(excluded.range_high, range_high),
-      source     = 'pdf_import',
-      updated_at = excluded.updated_at
+      range_low     = COALESCE(excluded.range_low,  range_low),
+      range_high    = COALESCE(excluded.range_high, range_high),
+      source        = 'pdf_import',
+      lab_report_id = excluded.lab_report_id,
+      updated_at    = excluded.updated_at
   `)
 
   const markerNames = validMetrics.map(([k]) => k)
+  const selected = new Set(markerNames)
+
+  // Ranges for the markers the user actually kept, not every marker the OCR
+  // saw. reference_ranges arrives straight from the parse, so an unchecked
+  // marker used to still get its printed range written — and GET /blood then
+  // overlaid that range on every historical value of a marker this import
+  // never imported, with no UI to undo it.
+  const selectedRanges = Object.entries(reference_ranges ?? {})
+    .filter(([metric, range]) => selected.has(metric) && range && typeof range === 'object')
 
   try {
     db.transaction(() => {
@@ -1120,13 +1272,13 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
       for (const [metric, value] of validMetrics) {
         upsert.run({ date, metric, value: Number(value), source: 'pdf_import', notes: null, lab_report_id: reportId })
       }
-      for (const [metric, { low, high }] of Object.entries(reference_ranges ?? {})) {
+      for (const [metric, { low, high }] of selectedRanges) {
         if (low == null && high == null) continue
-        rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
+        rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null, lab_report_id: reportId })
       }
     })()
-    console.log(`[labs-confirm] Saved ${validMetrics.length} metrics for ${req.params.userId}`)
-    res.json({ ok: true, count: validMetrics.length, markers_found: markerNames })
+    console.log(`[labs-confirm] Saved ${validMetrics.length} metrics and ${selectedRanges.length} ranges for ${req.params.userId}`)
+    res.json({ ok: true, count: validMetrics.length, markers_found: markerNames, ranges_saved: selectedRanges.length })
   } catch (err) {
     console.error('[labs-confirm] DB write error:', err)
     res.status(500).json({ error: `Database write failed: ${err.message}` })

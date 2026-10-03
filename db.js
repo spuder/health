@@ -313,13 +313,27 @@ export function archiveUserDb(userId) {
  * stay put, and the deleted profile's metadata rows for them ride along inside
  * the archived .db.
  */
-export function archiveUserPdfs(userId) {
-  const dir = path.join(DATA_DIR, 'pdfs', userId)
+// Shared by the per-user artifact directories (pdfs/<id>/, dna/<id>/): rename
+// the directory aside rather than removing it -- same trade as archiveUserDb,
+// atomic and byte-free, reclaiming nothing until someone clears it by hand.
+function archiveUserSubdir(parent, userId) {
+  const dir = path.join(DATA_DIR, parent, userId)
   let stat
   try { stat = fs.statSync(dir) } catch { return { archived: false, dir: null } }
   if (!stat.isDirectory()) return { archived: false, dir: null }
 
   const target = archiveTarget(dir, archiveStamp())
   fs.renameSync(dir, target)
-  return { archived: true, dir: path.basename(target) }
+  return { archived: true, dir: `${parent}/${path.basename(target)}` }
+}
+
+export function archiveUserPdfs(userId) {
+  return archiveUserSubdir('pdfs', userId)
+}
+
+// Only the per-user directory is archived. The legacy flat dna/ files are left
+// in place on purpose: one content-addressed file can be shared by several
+// profiles, and this profile's database cannot see the others' references.
+export function archiveUserDna(userId) {
+  return archiveUserSubdir('dna', userId)
 }

@@ -129,6 +129,13 @@ export function getDb(userId) {
   try { db.exec(`ALTER TABLE metrics ADD COLUMN lab_report_id INTEGER REFERENCES lab_reports(id) ON DELETE SET NULL`) } catch {}
   db.exec(`CREATE INDEX IF NOT EXISTS idx_metrics_lab_report ON metrics(lab_report_id)`)
 
+  // Same idea for imported reference ranges: remember which import wrote a
+  // marker_configs row so deleting that report can take its ranges back out.
+  // Without this a misparsed range (OCR reading an LDL footnote as 0–1.2)
+  // outlives the import and silently misjudges every historical value, with no
+  // UI to repair it. NULL for hardcoded rows and for pre-existing imports.
+  try { db.exec(`ALTER TABLE marker_configs ADD COLUMN lab_report_id INTEGER REFERENCES lab_reports(id) ON DELETE SET NULL`) } catch {}
+
   // Backfill file_hash for any existing reports that don't have one yet
   const unhashed = db.prepare(`SELECT id, filename FROM lab_reports WHERE file_hash IS NULL`).all()
   if (unhashed.length) {

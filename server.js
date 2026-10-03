@@ -1006,8 +1006,13 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
       }
     }
 
+    // Reference ranges this import wrote. Removing them lets GET /blood fall
+    // back to the hardcoded BLOOD_MARKERS baseline instead of judging every
+    // historical value of the marker against a range from a deleted report.
+    const ranges = db.prepare(`DELETE FROM marker_configs WHERE lab_report_id = ?`).run(report.id)
+
     db.prepare(`DELETE FROM lab_reports WHERE id = ?`).run(report.id)
-    return { deletedMetrics: linked.changes + legacyChanges, skipped }
+    return { deletedMetrics: linked.changes + legacyChanges, deletedRanges: ranges.changes, skipped }
   })()
 
   if (report.filename) {
@@ -1018,10 +1023,11 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
   if (result.skipped.length) {
     console.log(`[lab-reports] Report ${report.id}: left ${result.skipped.length} unlinked legacy metric(s) in place — also listed by another report on ${report.date}: ${result.skipped.join(', ')}`)
   }
-  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${result.deletedMetrics} metrics removed`)
+  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${result.deletedMetrics} metrics, ${result.deletedRanges} ranges removed`)
   res.json({
     ok: true,
     deleted_metrics: result.deletedMetrics,
+    deleted_ranges: result.deletedRanges,
     kept_shared_metrics: result.skipped,
   })
 })
@@ -1119,17 +1125,30 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
       lab_report_id = excluded.lab_report_id
   `)
 
+  // optimal_low/optimal_high are deliberately absent from this statement (both
+  // on insert and on conflict): they only ever come from the hardcoded
+  // BLOOD_MARKERS table, never from a lab's printed range.
   const rangeUpsert = db.prepare(`
-    INSERT INTO marker_configs (metric, range_low, range_high, source, updated_at)
-    VALUES (@metric, @range_low, @range_high, 'pdf_import', datetime('now'))
+    INSERT INTO marker_configs (metric, range_low, range_high, source, lab_report_id, updated_at)
+    VALUES (@metric, @range_low, @range_high, 'pdf_import', @lab_report_id, datetime('now'))
     ON CONFLICT(metric) DO UPDATE SET
-      range_low  = COALESCE(excluded.range_low,  range_low),
-      range_high = COALESCE(excluded.range_high, range_high),
-      source     = 'pdf_import',
-      updated_at = excluded.updated_at
+      range_low     = COALESCE(excluded.range_low,  range_low),
+      range_high    = COALESCE(excluded.range_high, range_high),
+      source        = 'pdf_import',
+      lab_report_id = excluded.lab_report_id,
+      updated_at    = excluded.updated_at
   `)
 
   const markerNames = validMetrics.map(([k]) => k)
+  const selected = new Set(markerNames)
+
+  // Ranges for the markers the user actually kept, not every marker the OCR
+  // saw. reference_ranges arrives straight from the parse, so an unchecked
+  // marker used to still get its printed range written — and GET /blood then
+  // overlaid that range on every historical value of a marker this import
+  // never imported, with no UI to undo it.
+  const selectedRanges = Object.entries(reference_ranges ?? {})
+    .filter(([metric, range]) => selected.has(metric) && range && typeof range === 'object')
 
   try {
     db.transaction(() => {
@@ -1143,13 +1162,13 @@ app.post('/api/:userId/import/labs-confirm', requireUser, (req, res) => {
       for (const [metric, value] of validMetrics) {
         upsert.run({ date, metric, value: Number(value), source: 'pdf_import', notes: null, lab_report_id: reportId })
       }
-      for (const [metric, { low, high }] of Object.entries(reference_ranges ?? {})) {
+      for (const [metric, { low, high }] of selectedRanges) {
         if (low == null && high == null) continue
-        rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null })
+        rangeUpsert.run({ metric, range_low: low ?? null, range_high: high ?? null, lab_report_id: reportId })
       }
     })()
-    console.log(`[labs-confirm] Saved ${validMetrics.length} metrics for ${req.params.userId}`)
-    res.json({ ok: true, count: validMetrics.length, markers_found: markerNames })
+    console.log(`[labs-confirm] Saved ${validMetrics.length} metrics and ${selectedRanges.length} ranges for ${req.params.userId}`)
+    res.json({ ok: true, count: validMetrics.length, markers_found: markerNames, ranges_saved: selectedRanges.length })
   } catch (err) {
     console.error('[labs-confirm] DB write error:', err)
     res.status(500).json({ error: `Database write failed: ${err.message}` })

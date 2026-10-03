@@ -557,6 +557,59 @@ const HAE_METRIC_MAP = {
   sleep_analysis_core_sleep: null,
 }
 
+// How several samples on the same calendar day collapse into the one row that
+// UNIQUE(date, metric, source) allows, keyed on the MAPPED metric name.
+//
+//   'sum'  — cumulative over the day; a day's value is the total of its samples.
+//            Apple ships these as ~1,440 one-minute buckets, so this is the one that
+//            matters: without it the stored value was a single minute of the day.
+//   'avg'  — an instantaneous reading sampled continuously; the day's representative
+//            value is the mean of its samples.
+//   'last' — already a once-a-day figure, or a deliberate discrete measurement; the
+//            newest sample by timestamp supersedes the others.
+//
+// Anything not listed — including unmapped HAE names, which pass through as-is — gets
+// HAE_AGGREGATION_DEFAULT. 'avg' is the safe default: an unknown metric that should have
+// been summed comes out low but in the right ballpark, whereas summing an unknown
+// instantaneous metric produces a number orders of magnitude too large with nothing to
+// flag it as wrong.
+const HAE_AGGREGATION = {
+  // Cumulative
+  active_calories: 'sum',
+  resting_calories: 'sum',
+  steps: 'sum',
+  distance_miles: 'sum',
+  exercise_minutes: 'sum',
+  time_in_daylight: 'sum',
+  // Sleep stage durations only reach this path when HAE sends sleep_analysis_* as plain
+  // qty points; they are stage lengths, so a night's figure is their total. (The raw
+  // per-stage interval and compound nightly paths above never get here.)
+  sleep_hours: 'sum',
+  deep_sleep_hours: 'sum',
+  rem_sleep_hours: 'sum',
+  core_sleep_hours: 'sum',
+  awake_hours: 'sum',
+  // Instantaneous, sampled many times a day → mean
+  heart_rate: 'avg',
+  hrv: 'avg',
+  blood_oxygen: 'avg',
+  respiratory_rate: 'avg',
+  blood_glucose: 'avg',
+  bp_systolic: 'avg',
+  bp_diastolic: 'avg',
+  body_temp_f: 'avg',
+  wrist_temp_c: 'avg',
+  physical_effort: 'avg',
+  // One figure per day already, or a discrete measurement → newest wins
+  weight: 'last',
+  bmi: 'last',
+  body_fat: 'last',
+  lean_mass: 'last',
+  resting_heart_rate: 'last',
+  vo2_max: 'last',
+}
+const HAE_AGGREGATION_DEFAULT = 'avg'
+
 // Linear HAE→stored-unit scale, keyed on the MAPPED metric name rather than the HAE one.
 // Two HAE names map to `weight` (`body_mass` and the `weight_body_mass` alias), so a test
 // on the HAE name only catches one of them — an export using the alias with units 'kg'
@@ -616,6 +669,12 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
   }
 
   const importAll = db.transaction(() => {
+    // Accumulator for the generic `qty` path, keyed `${date}|${metric}`. It lives outside
+    // the metrics loop on purpose: two HAE names can map onto the same metric in one
+    // payload (`active_energy` and `active_energy_burned` both → active_calories), and
+    // their samples belong in the same daily bucket.
+    const daily = new Map()
+
     for (const { name, units, data = [] } of metrics) {
       const mappedName = name in HAE_METRIC_MAP ? HAE_METRIC_MAP[name] : name
       if (mappedName === null) { stats.skipped += data.length; continue }  // explicitly ignored metric
@@ -768,17 +827,74 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         continue
       }
 
+      // One HAE data point is a single sample, not a day. A cumulative metric such as
+      // active_energy_burned arrives as ~1,440 one-minute buckets per day; writing each
+      // one straight to (date, metric, 'apple_health') meant every sample overwrote the
+      // previous one and the stored "daily" value was whichever sample happened to be
+      // last in the array — which is why active_calories reads 0.0–1.2 per day against a
+      // real ~500 kcal. Accumulate per (date, metric) here and collapse with the metric's
+      // HAE_AGGREGATION policy after the loop.
       for (const point of data) {
         const date = point.date?.slice(0, 10)
         if (!date) { stats.skipped++; continue }
 
-        const raw = parseFloat(point.qty ?? point.Avg ?? point.Max ?? point.Min)
+        const qty = parseFloat(point.qty)
+        const raw = isNaN(qty) ? parseFloat(point.Avg ?? point.Max ?? point.Min) : qty
         if (isNaN(raw)) { stats.skipped++; continue }
 
-        const value = roundValue(metricName, units, raw * unitScale(metricName, units))
-        upsert.run({ date, metric: metricName, value, source: 'apple_health' })
-        stats.imported++
+        const key = `${date}|${metricName}`
+        if (!daily.has(key)) {
+          daily.set(key, {
+            date,
+            metric: metricName,
+            units,
+            policy: metricName in HAE_AGGREGATION ? HAE_AGGREGATION[metricName] : HAE_AGGREGATION_DEFAULT,
+            total: 0, count: 0,       // every sample, for 'avg'
+            sum: 0, sumCount: 0,      // qty samples only, for 'sum'
+            last: null, lastTs: NaN,  // newest by timestamp, for 'last'
+            max: -Infinity,
+          })
+        }
+        const acc = daily.get(key)
+        // Scale per sample so a payload mixing units for one metric still accumulates
+        // coherently; rounding happens once, at flush.
+        const value = raw * unitScale(metricName, units)
+        acc.total += value
+        acc.count++
+        if (value > acc.max) acc.max = value
+        // Fall back to array order when the timestamp is unparseable, which is what the
+        // old overwrite-per-point behaviour effectively did.
+        const ts = Date.parse(point.date)
+        if (acc.last === null || isNaN(ts) || isNaN(acc.lastTs) || ts >= acc.lastTs) {
+          acc.last = value
+          acc.lastTs = ts
+        }
+        // An Avg/Min/Max point is already a summary over some window, so it never feeds a
+        // 'sum' — a day of per-window averages has no meaningful total.
+        if (!isNaN(qty)) { acc.sum += value; acc.sumCount++ }
       }
+    }
+
+    // Collapse the accumulated samples into the one row per (date, metric) that the
+    // UNIQUE constraint allows.
+    for (const acc of daily.values()) {
+      let value
+      if (acc.policy === 'sum') {
+        // No qty samples at all means HAE pre-aggregated the day for us; keep the largest
+        // of those summaries rather than inventing a total out of per-window averages.
+        value = acc.sumCount ? acc.sum : acc.max
+      } else if (acc.policy === 'avg') {
+        value = acc.total / acc.count
+      } else {
+        value = acc.last
+      }
+      upsert.run({
+        date: acc.date,
+        metric: acc.metric,
+        value: roundValue(acc.metric, acc.units, value),
+        source: 'apple_health',
+      })
+      stats.imported++
     }
 
     // Aggregate workouts → workout_count + exercise_minutes + HR zones per day

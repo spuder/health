@@ -66,18 +66,30 @@ function OnboardingScreen() {
   const [heightIn, setHeightIn]   = useState('')
   const [birthYear, setBirthYear] = useState('')
   const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState(null)
 
+  // Any rejection here (duplicate name, bad payload) used to reject
+  // unhandled, leaving the button on "Creating…" with nothing on screen to
+  // explain why. switchUser is also guarded: handing it an id-less response
+  // is what wrote an empty hd_userId and wedged the session.
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!name.trim()) return
     setLoading(true)
-    const height_inches = heightFt || heightIn
-      ? (parseInt(heightFt || 0) * 12) + parseInt(heightIn || 0)
-      : null
-    const birth_year = birthYear ? parseInt(birthYear) : null
-    const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
-    const user = await addUser({ name: name.trim(), initials, color: '#7c3aed', height_inches, birth_year })
-    switchUser(user.id)
+    setError(null)
+    try {
+      const height_inches = heightFt || heightIn
+        ? (parseInt(heightFt || 0) * 12) + parseInt(heightIn || 0)
+        : null
+      const birth_year = birthYear ? parseInt(birthYear) : null
+      const initials = name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2)
+      const user = await addUser({ name: name.trim(), initials, color: '#7c3aed', height_inches, birth_year })
+      if (!user?.id) throw new Error('The server did not return a usable profile id.')
+      switchUser(user.id)
+    } catch (err) {
+      setError(err.message || 'Could not create the profile.')
+      setLoading(false)
+    }
   }
 
   return (
@@ -102,6 +114,11 @@ function OnboardingScreen() {
               <input type="number" min="1920" max={new Date().getFullYear() - 10} placeholder="1990" value={birthYear} onChange={e => setBirthYear(e.target.value)} style={{ width: 88 }} />
             </div>
           </div>
+          {error && (
+            <div className="bg-red-950 border border-red-800 text-red-300 text-xs px-3 py-2.5 rounded-xl">
+              ⚠ {error}
+            </div>
+          )}
           <button type="submit" disabled={!name.trim() || loading}
             className="bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-40 text-white font-medium py-2.5 rounded-xl transition-colors mt-2">
             {loading ? 'Creating…' : 'Create profile'}
@@ -134,10 +151,13 @@ function Dashboard() {
   const [error,   setError]         = useState(null)
 
   const loadAll = useCallback(async ({ showLoading = false } = {}) => {
-    if (!currentUserId) return
     if (showLoading) setLoading(true)
     setError(null)
     try {
+      // Inside the try on purpose: as an early return above it this skipped
+      // the finally, so `loading` stayed true forever and the dashboard was
+      // stuck on the skeleton with no error and no way forward.
+      if (!currentUserId) return
       const [body, sleep, exercise, heartrate, blood, events, reports, protocols, dna] = await Promise.all([
         api.getBody(currentUserId),
         api.getSleep(currentUserId),
@@ -370,7 +390,7 @@ function Dashboard() {
 
 // ── Root: decides which screen to show ───────────────────────
 function AppInner() {
-  const { users, loading } = useUser()
+  const { users, currentUser, loading } = useUser()
 
   if (loading) {
     return (
@@ -381,6 +401,20 @@ function AppInner() {
   }
 
   if (users.length === 0) return <OnboardingScreen />
+
+  // users.length > 0 but nothing resolved yet — a stored id that isn't in
+  // users.json any more, or one that was never valid. UserProvider's reconcile
+  // effect re-points it at a real profile on the next tick; rendering the
+  // dashboard against a null user in the meantime is what used to wedge it on
+  // the loading skeleton.
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#0d1520] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-lg bg-[#7c3aed] animate-pulse" />
+      </div>
+    )
+  }
+
   return <Dashboard />
 }
 

@@ -965,6 +965,38 @@ function resolveLabPdfPath(userId, filename) {
   return null
 }
 
+// A file is written at preview time, before any lab_reports row exists, so an
+// abandoned preview leaves an orphaned medical PDF on disk that no UI can
+// remove. Sweep this user's own upload dir whenever they import again:
+// unreferenced files older than a day, i.e. long past any open preview.
+// Legacy flat files in pdfs/ are deliberately never swept — they can belong to
+// another user's report, which this DB cannot see.
+const ORPHAN_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000
+
+function sweepAbandonedUploads(db, userId) {
+  let entries
+  try { entries = fs.readdirSync(labPdfDir(userId)) } catch { return }
+  if (!entries.length) return
+
+  const referenced = new Set(
+    db.prepare(`SELECT filename FROM lab_reports WHERE filename IS NOT NULL`)
+      .all()
+      .map(r => path.basename(r.filename))
+  )
+  const cutoff = Date.now() - ORPHAN_UPLOAD_TTL_MS
+
+  for (const name of entries) {
+    if (referenced.has(name)) continue
+    const filePath = path.join(labPdfDir(userId), name)
+    try {
+      const stat = fs.statSync(filePath)
+      if (!stat.isFile() || stat.mtimeMs > cutoff) continue
+      fs.unlinkSync(filePath)
+      console.log(`[labs-pdf] Swept abandoned upload ${userId}/${name}`)
+    } catch {}
+  }
+}
+
 app.get('/api/:userId/lab-reports', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
   const reports = db.prepare(`SELECT * FROM lab_reports ORDER BY date DESC, created_at DESC`).all()
@@ -1102,6 +1134,7 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
   const storedFilename = `${fileHash}${ext}`
   const userPdfsDir = labPdfDir(req.params.userId)
   fs.mkdirSync(userPdfsDir, { recursive: true })
+  sweepAbandonedUploads(db0, req.params.userId)
   fs.writeFileSync(path.join(userPdfsDir, storedFilename), req.file.buffer)
 
   // ── 1. Send file to Claude ────────────────────────────────
@@ -1130,12 +1163,29 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
       throw new Error('Response too large — try a shorter file or split it into sections')
     }
 
+    // A refusal is an HTTP 200 with no text block at all, which otherwise
+    // surfaces as the misleading "Empty response from AI". stop_details is
+    // populated only for this stop_reason.
+    if (msg.stop_reason === 'refusal') {
+      const why = msg.stop_details?.explanation || msg.stop_details?.category || 'no explanation given'
+      throw new Error(`The AI declined to parse this file: ${why}`)
+    }
+
     // Opus 5 thinks by default, so content[0] is a (text-less) thinking block,
-    // not the answer — pull the first actual text block instead of index 0.
-    const raw = msg.content.find(b => b.type === 'text')?.text?.trim() ?? ''
+    // not the answer. Join every text block rather than taking the first one:
+    // the answer can arrive split across blocks, or behind a preamble block.
+    const raw = msg.content.filter(b => b.type === 'text').map(b => b.text ?? '').join('').trim()
     if (!raw) throw new Error('Empty response from AI')
     const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    parsed = JSON.parse(jsonStr)
+    try {
+      parsed = JSON.parse(jsonStr)
+    } catch {
+      // Prose around the JSON ("Here is the JSON:") — take the outermost object.
+      const start = jsonStr.indexOf('{')
+      const end = jsonStr.lastIndexOf('}')
+      if (start === -1 || end <= start) throw new Error('AI response was not JSON')
+      parsed = JSON.parse(jsonStr.slice(start, end + 1))
+    }
   } catch (err) {
     console.error('[labs-pdf] Claude parse error:', err)
     return res.status(500).json({ error: `AI parsing failed: ${err.message}` })

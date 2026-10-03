@@ -203,7 +203,6 @@ export function getDb(userId) {
     }
   }
 
-
   connections[userId] = db
   return db
 }

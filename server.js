@@ -126,7 +126,7 @@ const BODY_METRICS = [
 // which is exactly what happened to hr_hard_minutes (written by POST /exercise, read by
 // ExerciseSection) until it was added below.
 const EXERCISE_METRICS = [
-  'exercise_minutes', 'workout_count', 'hr_hard_minutes',
+  'exercise_minutes', 'workout_minutes', 'workout_count', 'hr_hard_minutes',
   'hr_z1_min', 'hr_z2_min', 'hr_z3_min', 'hr_z4_min', 'hr_z5_min',
 ]
 
@@ -897,7 +897,16 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       stats.imported++
     }
 
-    // Aggregate workouts → workout_count + exercise_minutes + HR zones per day
+    // Aggregate workouts → workout_count + workout_minutes + HR zones per day.
+    //
+    // This used to write `exercise_minutes`, which the metrics loop above also writes
+    // from apple_exercise_time. Same (date, metric, source) → last writer won, so the
+    // value flip-flopped between syncs depending on which payload arrived last: of the
+    // dates in this DB that have a workout_count, most read exercise_minutes = 1.0 (a
+    // single one-minute apple_exercise_time sample) while a handful read 13/27/60/68 (the
+    // workout-derived sum). The Exercise chart was plotting two incompatible quantities —
+    // Apple's exercise-ring time and time spent in recorded workouts — so they get
+    // separate metrics now.
     if (workouts.length) {
       const age = req.user.birth_year ? new Date().getFullYear() - req.user.birth_year : null
       const maxHR = age ? 220 - age : null
@@ -907,7 +916,12 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         if (!date) continue
         if (!byDate[date]) byDate[date] = { count: 0, minutes: 0, z: [0, 0, 0, 0, 0] }
         byDate[date].count++
-        byDate[date].minutes += (w.duration ?? 0) / 60  // duration is in seconds
+        // w.duration is in seconds. Confirmed against the stored results rather than the
+        // comment: 2026-07-18 has one workout and 27 stored minutes, 2026-07-19 one and
+        // 13 — minutes-valued durations would need a 27-hour workout to produce that, and
+        // the per-day HR sample counts (25 and 7) track those figures at roughly one
+        // sample a minute.
+        byDate[date].minutes += (w.duration ?? 0) / 60
 
         if (maxHR && w.heartRateData?.length) {
           for (const d of w.heartRateData) {
@@ -922,7 +936,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
       }
       for (const [date, { count, minutes, z }] of Object.entries(byDate)) {
         upsert.run({ date, metric: 'workout_count', value: count, source: 'apple_health' })
-        upsert.run({ date, metric: 'exercise_minutes', value: Math.round(minutes), source: 'apple_health' })
+        upsert.run({ date, metric: 'workout_minutes', value: Math.round(minutes), source: 'apple_health' })
         stats.imported += 2
         z.forEach((mins, i) => {
           if (mins > 0) {
@@ -943,7 +957,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// Exercise  (metrics: exercise_minutes, workout_count, hr_hard_minutes)
+// Exercise  (metrics: exercise_minutes, workout_minutes, workout_count, hr_hard_minutes)
 // ─────────────────────────────────────────────────────────────
 
 app.get('/api/:userId/exercise', requireUser, (req, res) => {

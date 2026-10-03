@@ -934,6 +934,37 @@ InBody body-composition scans:
   bmr                  → kcal
   total_body_water     → liters`
 
+// ── Lab file storage ──────────────────────────────────────────
+// New uploads go to DATA_DIR/pdfs/<userId>/<hash><ext>. The old flat
+// DATA_DIR/pdfs/<name> layout was shared by every user, so two people
+// importing the same family lab PDF got one file on disk under one name and
+// either one's delete unlinked it out from under the other.
+//
+// Reads have to stay compatible with three legacy flat names already on disk
+// ('ocr_import', '<user>_<date>_<ts>.pdf', '<hash>.PDF'), so lookups try the
+// per-user path first and then fall back to the flat one.
+
+function labPdfDir(userId) {
+  return path.join(DATA_DIR, 'pdfs', userId)
+}
+
+function resolveLabPdfPath(userId, filename) {
+  if (!filename) return null
+  const root = path.resolve(path.join(DATA_DIR, 'pdfs'))
+  const candidates = [
+    path.join(root, userId, path.basename(filename)),  // per-user layout
+    path.join(root, filename),                          // legacy flat layout
+  ]
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate)
+    if (!resolved.startsWith(root + path.sep)) continue  // never escape pdfs/
+    try {
+      if (fs.statSync(resolved).isFile()) return resolved
+    } catch {}
+  }
+  return null
+}
+
 app.get('/api/:userId/lab-reports', requireUser, (req, res) => {
   const db = getDb(req.params.userId)
   const reports = db.prepare(`SELECT * FROM lab_reports ORDER BY date DESC, created_at DESC`).all()
@@ -945,10 +976,12 @@ app.get('/api/:userId/lab-reports/:id/pdf', requireUser, (req, res) => {
   const report = db.prepare(`SELECT * FROM lab_reports WHERE id = ?`).get(req.params.id)
   if (!report) return res.status(404).json({ error: 'Report not found' })
 
-  const pdfPath = path.join(DATA_DIR, 'pdfs', report.filename)
-  if (!fs.existsSync(pdfPath)) return res.status(404).json({ error: 'PDF file not found' })
+  const pdfPath = resolveLabPdfPath(req.params.userId, report.filename)
+  if (!pdfPath) return res.status(404).json({ error: 'PDF file not found' })
 
-  const downloadName = (report.original_filename || report.filename).replace(/[^\x20-\x7E]/g, '').replace(/"/g, '')
+  const downloadName = path.basename(report.original_filename || report.filename)
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/"/g, '')
   res.setHeader('Content-Type', 'application/pdf')
   res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`)
   fs.createReadStream(pdfPath).pipe(res)
@@ -963,6 +996,14 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
 
   let markerNames = []
   try { markerNames = JSON.parse(report.markers_json ?? '[]') } catch {}
+
+  // Other rows that point at the same stored file. The UNIQUE index is on
+  // file_hash (NULL for legacy rows), not filename, so siblings genuinely
+  // share a name — reports 1-3 in spencer.db are all 'ocr_import'.
+  const fileSiblings = report.filename
+    ? db.prepare(`SELECT count(*) AS n FROM lab_reports WHERE id != ? AND filename = ?`)
+        .get(report.id, report.filename).n
+    : 0
 
   const result = db.transaction(() => {
     // Metrics explicitly stamped with this report's id.
@@ -1015,9 +1056,16 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
     return { deletedMetrics: linked.changes + legacyChanges, deletedRanges: ranges.changes, skipped }
   })()
 
-  if (report.filename) {
-    const filePath = path.join(DATA_DIR, 'pdfs', report.filename)
-    fs.unlink(filePath, () => {})
+  // Only a file under pdfs/<userId>/ is provably this user's. A legacy flat
+  // path can be the very same file another user's report points at (same
+  // sha256, both imported it) and this DB cannot see theirs, so leave it.
+  const storedPath = resolveLabPdfPath(req.params.userId, report.filename)
+  const ownDir = path.resolve(labPdfDir(req.params.userId)) + path.sep
+  if (storedPath && !fileSiblings && storedPath.startsWith(ownDir)) {
+    fs.unlink(storedPath, () => {})
+  } else if (storedPath) {
+    const why = fileSiblings ? `${fileSiblings} other report(s) reference it` : 'shared legacy path'
+    console.log(`[lab-reports] Kept ${report.filename} on disk — ${why}`)
   }
 
   if (result.skipped.length) {
@@ -1049,10 +1097,12 @@ app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), asyn
 
   // ── 0b. Persist the uploaded file to disk ─────────────────
   const ext = path.extname(req.file.originalname || '') || (isCsv ? '.csv' : isPng ? '.png' : '.pdf')
+  // Per-user directory — see labPdfDir(). The DB keeps the bare basename, so
+  // resolveLabPdfPath() is what maps a row to a file in either layout.
   const storedFilename = `${fileHash}${ext}`
-  const pdfsDir = path.join(DATA_DIR, 'pdfs')
-  fs.mkdirSync(pdfsDir, { recursive: true })
-  fs.writeFileSync(path.join(pdfsDir, storedFilename), req.file.buffer)
+  const userPdfsDir = labPdfDir(req.params.userId)
+  fs.mkdirSync(userPdfsDir, { recursive: true })
+  fs.writeFileSync(path.join(userPdfsDir, storedFilename), req.file.buffer)
 
   // ── 1. Send file to Claude ────────────────────────────────
   let parsed

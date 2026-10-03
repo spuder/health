@@ -1590,6 +1590,15 @@ app.post('/api/:userId/protocols/:id/copy-to-next', requireUser, (req, res) => {
 // SPA fallback
 // ─────────────────────────────────────────────────────────────
 
+// Unmatched /api/* paths must 404 as JSON. Falling through to the catch-all
+// below answered them with index.html and a 200, so `res.json()` in
+// client/src/api.js choked on the markup and every typo'd route or
+// deleted-user call surfaced as `SyntaxError: Unexpected token '<'` instead of
+// the actual status. app.use (not app.get) so non-GET verbs are covered too.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `No API route for ${req.method} ${req.originalUrl}` })
+})
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/dist/index.html'))
 })

@@ -557,10 +557,23 @@ const HAE_METRIC_MAP = {
   sleep_analysis_core_sleep: null,
 }
 
-function convertUnit(haeMetricName, qty, units) {
-  if (haeMetricName === 'body_mass' && units === 'kg') return Math.round(qty * 2.20462 * 10) / 10
-  if (haeMetricName?.includes('sleep') && units === 'min') return Math.round(qty / 60 * 100) / 100
-  return Math.round(qty * 10) / 10
+// Linear HAE→stored-unit scale, keyed on the MAPPED metric name rather than the HAE one.
+// Two HAE names map to `weight` (`body_mass` and the `weight_body_mass` alias), so a test
+// on the HAE name only catches one of them — an export using the alias with units 'kg'
+// would store ~80 next to the ~176 pound values already in the table, on the same axis.
+// Scaling is kept separate from rounding so a day's samples can be accumulated at full
+// precision and rounded once, instead of rounding every one-minute sample and summing the
+// error.
+function unitScale(metricName, units) {
+  if (metricName === 'weight' && units === 'kg') return 2.20462
+  if (metricName?.includes('sleep') && units === 'min') return 1 / 60
+  return 1
+}
+
+// Decimals a converted value is stored at — sleep hours derived from minutes need two.
+function roundValue(metricName, units, value) {
+  const factor = metricName?.includes('sleep') && units === 'min' ? 100 : 10
+  return Math.round(value * factor) / factor
 }
 
 app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
@@ -762,7 +775,7 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         const raw = parseFloat(point.qty ?? point.Avg ?? point.Max ?? point.Min)
         if (isNaN(raw)) { stats.skipped++; continue }
 
-        const value = convertUnit(name, raw, units)
+        const value = roundValue(metricName, units, raw * unitScale(metricName, units))
         upsert.run({ date, metric: metricName, value, source: 'apple_health' })
         stats.imported++
       }

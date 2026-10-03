@@ -964,24 +964,50 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
   let markerNames = []
   try { markerNames = JSON.parse(report.markers_json ?? '[]') } catch {}
 
-  const deletedMetrics = db.transaction(() => {
+  const result = db.transaction(() => {
     // Metrics explicitly stamped with this report's id.
     const linked = db.prepare(`DELETE FROM metrics WHERE lab_report_id = ?`).run(report.id)
 
     // Legacy fallback for reports imported before lab_report_id existed —
-    // match by date + metric name, but only among still-unlinked rows so we
-    // never touch a value another (properly linked) report owns.
+    // match by date + metric name among still-unlinked rows.
+    //
+    // That used to be justified with "no other (properly linked) report owns
+    // these", which only holds if the other owner IS linked. In the real
+    // databases nothing was: every pdf_import row predates the column. And
+    // reports share dates constantly (three InBody scans on 2026-05-15, seven
+    // panels on 2026-05-18), where UNIQUE(date, metric, source) means all of
+    // them read one single row — so deleting one wiped the values its siblings
+    // still list, leaving them in the UI with empty charts and no undo.
+    //
+    // So: only claim markers that no other report on this date lists. If every
+    // marker is contested nothing is deleted by name, and the rows stay until
+    // the db.js backfill can attribute them (or forever, if it never can).
     let legacyChanges = 0
+    let skipped = []
     if (markerNames.length) {
-      const placeholders = markerNames.map(() => '?').join(',')
-      legacyChanges = db.prepare(`
-        DELETE FROM metrics
-        WHERE source = 'pdf_import' AND lab_report_id IS NULL AND date = ? AND metric IN (${placeholders})
-      `).run(report.date, ...markerNames).changes
+      const shared = new Set()
+      const sameDate = db.prepare(`SELECT markers_json FROM lab_reports WHERE id != ? AND date = ?`)
+        .all(report.id, report.date)
+      for (const other of sameDate) {
+        let markers = []
+        try { markers = JSON.parse(other.markers_json ?? '[]') } catch {}
+        if (Array.isArray(markers)) for (const metric of markers) shared.add(metric)
+      }
+
+      const exclusive = markerNames.filter(m => !shared.has(m))
+      skipped = markerNames.filter(m => shared.has(m))
+
+      if (exclusive.length) {
+        const placeholders = exclusive.map(() => '?').join(',')
+        legacyChanges = db.prepare(`
+          DELETE FROM metrics
+          WHERE source = 'pdf_import' AND lab_report_id IS NULL AND date = ? AND metric IN (${placeholders})
+        `).run(report.date, ...exclusive).changes
+      }
     }
 
     db.prepare(`DELETE FROM lab_reports WHERE id = ?`).run(report.id)
-    return linked.changes + legacyChanges
+    return { deletedMetrics: linked.changes + legacyChanges, skipped }
   })()
 
   if (report.filename) {
@@ -989,8 +1015,15 @@ app.delete('/api/:userId/lab-reports/:id', requireUser, (req, res) => {
     fs.unlink(filePath, () => {})
   }
 
-  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${deletedMetrics} metrics removed`)
-  res.json({ ok: true, deleted_metrics: deletedMetrics })
+  if (result.skipped.length) {
+    console.log(`[lab-reports] Report ${report.id}: left ${result.skipped.length} unlinked legacy metric(s) in place — also listed by another report on ${report.date}: ${result.skipped.join(', ')}`)
+  }
+  console.log(`[lab-reports] Deleted report ${report.id} (${report.date}, ${report.original_filename ?? report.filename}) — ${result.deletedMetrics} metrics removed`)
+  res.json({
+    ok: true,
+    deleted_metrics: result.deletedMetrics,
+    kept_shared_metrics: result.skipped,
+  })
 })
 
 app.post('/api/:userId/import/labs-pdf', requireUser, upload.single('pdf'), async (req, res) => {

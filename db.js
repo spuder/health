@@ -144,6 +144,59 @@ export function getDb(userId) {
     }
   }
 
+  // Backfill metrics.lab_report_id for rows written before that column existed.
+  // Every legacy pdf_import row is unlinked, which is what made the delete
+  // handler's date + metric fallback so destructive: several reports routinely
+  // share a date, and by UNIQUE(date, metric, source) they all read the same
+  // single metrics row, so deleting one report took its siblings' values with
+  // it. Linking the rows that can be attributed shrinks that blast radius.
+  //
+  // Conservative on purpose: a row is claimed only when exactly one report
+  // could own it — same date, and that marker named in exactly one report's
+  // markers_json. Genuinely ambiguous rows (e.g. three InBody scans on one
+  // date all listing the same eight markers) stay NULL; a wrong link would
+  // delete the wrong data, which is worse than no link at all. Idempotent:
+  // only ever reads rows that are still NULL, so re-running is a no-op.
+  const orphanCount = db.prepare(`
+    SELECT count(*) AS n FROM metrics WHERE source = 'pdf_import' AND lab_report_id IS NULL
+  `).get().n
+
+  if (orphanCount) {
+    // (date, metric) → set of report ids naming that marker on that date
+    const claims = new Map()
+    for (const report of db.prepare(`SELECT id, date, markers_json FROM lab_reports`).all()) {
+      let markers = []
+      try { markers = JSON.parse(report.markers_json ?? '[]') } catch {}
+      if (!Array.isArray(markers)) continue
+      for (const metric of markers) {
+        const key = JSON.stringify([report.date, metric])
+        const owners = claims.get(key)
+        if (owners) owners.add(report.id)
+        else claims.set(key, new Set([report.id]))
+      }
+    }
+
+    const orphans = db.prepare(`
+      SELECT id, date, metric FROM metrics WHERE source = 'pdf_import' AND lab_report_id IS NULL
+    `).all()
+    const link = db.prepare(`UPDATE metrics SET lab_report_id = ? WHERE id = ? AND lab_report_id IS NULL`)
+
+    let linked = 0
+    db.transaction(() => {
+      for (const row of orphans) {
+        const owners = claims.get(JSON.stringify([row.date, row.metric]))
+        if (!owners || owners.size !== 1) continue  // unclaimed or contested → leave it
+        link.run(owners.values().next().value, row.id)
+        linked++
+      }
+    })()
+
+    if (linked) {
+      console.log(`[db] ${userId}: linked ${linked}/${orphanCount} legacy pdf_import metrics to their lab report`)
+    }
+  }
+
+
   connections[userId] = db
   return db
 }

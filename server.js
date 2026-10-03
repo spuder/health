@@ -121,8 +121,12 @@ const BODY_METRICS = [
   'lean_mass', 'visceral_fat', 'bmr', 'total_body_water',
 ]
 
+// Include list for GET /exercise. `GET /blood` is the complement of the four section
+// lists, so anything a client reads but that is missing here silently shows up in Labs —
+// which is exactly what happened to hr_hard_minutes (written by POST /exercise, read by
+// ExerciseSection) until it was added below.
 const EXERCISE_METRICS = [
-  'exercise_minutes', 'workout_count',
+  'exercise_minutes', 'workout_count', 'hr_hard_minutes',
   'hr_z1_min', 'hr_z2_min', 'hr_z3_min', 'hr_z4_min', 'hr_z5_min',
 ]
 

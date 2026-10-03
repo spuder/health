@@ -48,6 +48,7 @@ export const api = {
 
   getLabReports:  (userId)     => req(`/${userId}/lab-reports`),
   labReportPdfUrl:(userId, id) => `/api/${userId}/lab-reports/${id}/pdf`,
+  deleteLabReport:(userId, id) => req(`/${userId}/lab-reports/${id}`, { method: 'DELETE' }),
 
   confirmLabsImport: (userId, data) =>
     req(`/${userId}/import/labs-confirm`, { method: 'POST', body: JSON.stringify(data) }),

@@ -764,8 +764,13 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
         }
 
         for (const night of byNight.values()) {
+          // A night with no asleep time at all is not a night; skip it rather than
+          // writing a row of zeros over a good one.
+          const asleepHours = night.core + night.deep + night.rem + night.asleep
+          if (!(asleepHours > 0)) { stats.skipped++; continue }
+
           const sleepFields = [
-            ['sleep_hours', night.core + night.deep + night.rem + night.asleep],
+            ['sleep_hours', asleepHours],
             ['deep_sleep_hours', night.deep],
             ['rem_sleep_hours', night.rem],
             ['core_sleep_hours', night.core],
@@ -775,7 +780,11 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           ]
           let stored = 0
           for (const [metric, value] of sleepFields) {
-            if (value != null && !isNaN(value) && value > 0) {
+            // The night is known-good by this point, so write every field it has,
+            // including the zero ones. The old `value > 0` meant a night with no deep
+            // sleep kept the previous sync's deep figure, and a bedtime or wake time of
+            // exactly 00:00 was dropped entirely.
+            if (value != null && !isNaN(value) && value >= 0) {
               upsert.run({ date: night.ownerDate, metric, value: Math.round(value * 100) / 100, source: night.src, notes: null })
               stored++
             }
@@ -804,6 +813,8 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           // Skip naps — only process sessions starting between 7 PM and 2 AM
           if (!isNaN(startH) && startH >= 2 && startH < 19) { stats.skipped++; continue }
           const src = point.source ?? 'apple_health'
+          // Same as the raw-interval path: a night with no total sleep is not a night.
+          if (!(parseFloat(point.totalSleep) > 0)) { stats.skipped++; continue }
           const sleepFields = [
             { field: 'totalSleep', metric: 'sleep_hours' },
             { field: 'deep', metric: 'deep_sleep_hours' },
@@ -816,7 +827,9 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           let stored = 0
           for (const { field, metric, parse } of sleepFields) {
             const val = parse ? parse(point[field]) : parseFloat(point[field])
-            if (!isNaN(val) && (parse ? true : val > 0)) {
+            // `val > 0` for the stage fields had the same effect here as in the
+            // raw-interval path: a zero-deep-sleep night kept the previous sync's figure.
+            if (!isNaN(val)) {
               upsert.run({ date, metric, value: Math.round(val * 100) / 100, source: src, notes: null })
               stored++
             }

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 import multer from 'multer'
 
 import Anthropic from '@anthropic-ai/sdk'
-import { getDb, readUsers, writeUsers, DATA_DIR } from './db.js'
+import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, DATA_DIR } from './db.js'
 
 if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
   console.error('FATAL: ANTHROPIC_API_KEY is not set. Add it to your .env file.')
@@ -66,16 +66,62 @@ function normalizeMetricKey(raw) {
 // Users
 // ─────────────────────────────────────────────────────────────
 
+// A user id is a filesystem name (DATA_DIR/<id>.db) and an Express path
+// segment, so it has to be non-empty and URL-safe. The old one-liner slug
+// could return the empty string for any name without ASCII alphanumerics
+// ("李雷", "!!!"): the duplicate check passed, getDb('') created `data/.db`,
+// and then no route could ever match the empty `:userId`, so every subsequent
+// call for that profile 404'd with no way to repair it from the UI.
+//
+// Accents are folded rather than dropped, so "José" is `jose` and not `jos`.
+const MAX_USER_ID_LEN = 64
+
+function slugifyUserId(name) {
+  return name
+    .normalize('NFKD')             // split accented letters into base + mark
+    .replace(/[\u0300-\u036f]/g, '')  // drop the combining marks ("e" + accent -> "e")
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_USER_ID_LEN)
+    .replace(/-+$/, '')            // the slice may have left a trailing dash
+}
+
+// Names written entirely in a non-Latin script slug to nothing. Rejecting them
+// would mean this dashboard simply cannot hold a Chinese or Arabic name, so
+// instead they get a generated handle: the id is only an internal key, and the
+// display name is stored verbatim in `name` and is what the UI renders.
+function fallbackUserId(users) {
+  const taken = new Set(users.map(u => u.id))
+  if (!taken.has('user')) return 'user'
+  for (let n = 2; ; n++) {
+    const candidate = `user-${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+}
+
 app.get('/api/users', (req, res) => {
   res.json(readUsers())
 })
 
 app.post('/api/users', (req, res) => {
   const { name, color, initials, height_inches, birth_year } = req.body
-  if (!name) return res.status(400).json({ error: 'name is required' })
+  if (typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'name is required' })
+  }
 
-  const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
   const users = readUsers()
+  const slug = slugifyUserId(name.trim())
+
+  // Only the generated-handle path can collide on the display name instead of
+  // the slug, so that's the only place it needs checking.
+  if (!slug && users.find(u => u.name === name.trim())) {
+    return res.status(409).json({ error: `A profile named '${name.trim()}' already exists` })
+  }
+
+  const id = slug || fallbackUserId(users)
 
   if (users.find(u => u.id === id)) {
     return res.status(409).json({ error: `User '${id}' already exists` })
@@ -106,10 +152,36 @@ app.patch('/api/users/:userId', requireUser, (req, res) => {
   res.json({ ok: true, user: users[idx] })
 })
 
+// Removing the manifest entry is not enough: the cached connection and the
+// <userId>.db file both survive, so re-adding the same name (which slugs back
+// to the same id) reopens the old database and resurrects the previous
+// profile's entire history. Evict the handle and move the data aside.
+//
+// Archived, never deleted — see archiveUserDb/archiveUserPdfs in db.js for the
+// naming and for what is deliberately left in place.
 app.delete('/api/users/:userId', requireUser, (req, res) => {
-  const users = readUsers().filter(u => u.id !== req.params.userId)
-  writeUsers(users)
-  res.json({ ok: true })
+  const { userId } = req.params
+
+  // Manifest first: if an archive rename fails midway the profile is still
+  // gone from the UI, rather than listed but holding a closed connection.
+  writeUsers(readUsers().filter(u => u.id !== userId))
+
+  const archived = { db: [], pdfs: null }
+  try {
+    const db = archiveUserDb(userId)
+    archived.db = db.files
+    const pdfs = archiveUserPdfs(userId)
+    if (pdfs.archived) archived.pdfs = pdfs.dir
+  } catch (err) {
+    console.error(`[users] ${userId}: archive failed — ${err.message}`)
+    return res.status(500).json({
+      error: `Profile '${userId}' was removed from the list, but its data could not be archived: ${err.message}`,
+      archived,
+    })
+  }
+
+  console.log(`[users] Deleted ${userId}; archived ${[...archived.db, archived.pdfs].filter(Boolean).join(', ') || 'nothing (no data on disk)'}`)
+  res.json({ ok: true, archived })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -1726,6 +1798,15 @@ app.post('/api/:userId/protocols/:id/copy-to-next', requireUser, (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // SPA fallback
 // ─────────────────────────────────────────────────────────────
+
+// Unmatched /api/* paths must 404 as JSON. Falling through to the catch-all
+// below answered them with index.html and a 200, so `res.json()` in
+// client/src/api.js choked on the markup and every typo'd route or
+// deleted-user call surfaced as `SyntaxError: Unexpected token '<'` instead of
+// the actual status. app.use (not app.get) so non-GET verbs are covered too.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `No API route for ${req.method} ${req.originalUrl}` })
+})
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/dist/index.html'))

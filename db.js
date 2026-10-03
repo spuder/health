@@ -219,3 +219,107 @@ export function readUsers() {
 export function writeUsers(users) {
   fs.writeFileSync(USERS_FILE(), JSON.stringify(users, null, 2))
 }
+
+// ── Connection lifecycle ───────────────────────────────────────
+// Deleting a profile used to only rewrite users.json, which left both the
+// cached handle and <userId>.db behind. Because ids are slugified from the
+// display name, re-adding "Jane" slugs straight back to `jane`, getDb('jane')
+// hands back the still-open connection to the old file, and the previous
+// person's labs, DNA and protocols reappear under what the UI presents as a
+// brand new profile. No restart needed — same process, same cache.
+
+// Drop a user's cached connection and close it, so the next getDb() opens the
+// file fresh (or creates it). Returns true if there was one to evict.
+export function closeDb(userId) {
+  const db = connections[userId]
+  if (!db) return false
+  delete connections[userId]
+  try {
+    db.close()  // checkpoints and removes the -wal/-shm sidecars
+  } catch (err) {
+    console.error(`[db] ${userId}: close failed — ${err.message}`)
+  }
+  return true
+}
+
+// Timestamp suffix shared by every archived artifact of one delete, so the
+// pieces of a single profile stay visibly grouped on disk. ISO 8601 with the
+// colons and dot swapped for dashes — colons are legal on APFS and ext4 but
+// trip up enough tooling (scp, rsync targets, Windows bind mounts) to be worth
+// avoiding in a name the user may well have to copy around to recover.
+function archiveStamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-')
+}
+
+// Pick a non-colliding `<base>.deleted-<stamp>` next to the original.
+function archiveTarget(base, stamp) {
+  let target = `${base}.deleted-${stamp}`
+  let n = 2
+  while (fs.existsSync(target)) target = `${base}.deleted-${stamp}-${n++}`
+  return target
+}
+
+/**
+ * Retire a deleted user's SQLite file instead of unlinking it.
+ *
+ * This is medical data and the trigger is a single unconfirmed API call, so
+ * nothing is destroyed: the connection is evicted and closed, then the file is
+ * *renamed* aside to `<userId>.db.deleted-<timestamp>`. A rename within one
+ * directory is atomic and copies no bytes, but it also reclaims no disk space
+ * — the archives accumulate until somebody removes them by hand. That is the
+ * intended trade.
+ *
+ * The -wal/-shm sidecars move to `<archive>-wal` / `<archive>-shm`, which is
+ * exactly where SQLite looks for them relative to the renamed database, so the
+ * archive stays openable as a set: `sqlite3 data/jane.db.deleted-<stamp>`.
+ * close() normally checkpoints them away first; this covers the case where it
+ * could not (e.g. the handle was never cached because the process restarted).
+ *
+ * Returns { archived, closed, files } — `archived` is false when the user never
+ * had a database on disk, which is not an error.
+ */
+export function archiveUserDb(userId) {
+  const closed = closeDb(userId)
+  const dbPath = path.join(DATA_DIR, `${userId}.db`)
+  if (!fs.existsSync(dbPath)) return { archived: false, closed, files: [] }
+
+  const target = archiveTarget(dbPath, archiveStamp())
+  fs.renameSync(dbPath, target)
+  const files = [path.basename(target)]
+
+  for (const suffix of ['-wal', '-shm']) {
+    if (!fs.existsSync(dbPath + suffix)) continue
+    fs.renameSync(dbPath + suffix, target + suffix)
+    files.push(path.basename(target) + suffix)
+  }
+
+  return { archived: true, closed, files }
+}
+
+/**
+ * Retire a deleted user's lab-PDF directory the same way.
+ *
+ * `DATA_DIR/pdfs/<userId>/` is per-user, so moving the whole directory to
+ * `DATA_DIR/pdfs/<userId>.deleted-<timestamp>` can't strand another profile's
+ * report. The archived name contains a `.`, which slugification strips, so no
+ * future user id can ever resolve back into it.
+ *
+ * Deliberately NOT covered: the legacy flat PDFs that live directly in
+ * `DATA_DIR/pdfs/`, which predate the per-user layout and may be referenced by
+ * any user's lab_reports; and `DATA_DIR/dna/`, which is a single flat
+ * content-addressed store (`<sha256><ext>`) shared by every profile, so two
+ * people who upload the same raw-data export share one file on disk. Archiving
+ * either would take files out from under a profile that still exists. They
+ * stay put, and the deleted profile's metadata rows for them ride along inside
+ * the archived .db.
+ */
+export function archiveUserPdfs(userId) {
+  const dir = path.join(DATA_DIR, 'pdfs', userId)
+  let stat
+  try { stat = fs.statSync(dir) } catch { return { archived: false, dir: null } }
+  if (!stat.isDirectory()) return { archived: false, dir: null }
+
+  const target = archiveTarget(dir, archiveStamp())
+  fs.renameSync(dir, target)
+  return { archived: true, dir: path.basename(target) }
+}

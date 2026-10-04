@@ -70,7 +70,15 @@ Workouts are aggregated per day into `workout_count`, `exercise_minutes` and `hr
 
 `UserContext` holds the active user (`localStorage: hd_userId`); `App.jsx` keeps the active section in `localStorage: activeSection` and per-user hidden sections in `health_hidden_sections_<userId>`. All HTTP goes through the single `api` object in `client/src/api.js` — add endpoints there, not inline `fetch` in components. One `*Section.jsx` component per dashboard section; charts are Recharts; PNG export uses html2canvas.
 
+Every date in this app is a **local** calendar day — a sleep night, a weigh-in, a lab draw — stored as `YYYY-MM-DD`. Use `toLocalDateStr()` / `localDateDaysAgo()` from `client/src/localDate.js`; never `toISOString().slice(0,10)` for a date you compare or default against, which formats in UTC and names tomorrow from early evening onward west of UTC.
+
 Styling is a dark theme with literal hex values inline in components (`bg-[#131d2e]`, `text-[#94a3b8]`, accent `#7c3aed`). `tailwind.config.js` defines named colors but most components predate them — match the surrounding file rather than converting.
+
+## Retained artifacts
+
+Deleting a profile never unlinks anything: `db.js` renames the database to `<id>.db.deleted-<stamp>` (with its `-wal`/`-shm`) and its `pdfs/<id>/` and `dna/<id>/` directories alongside. Those, plus any `*.bak-*` snapshot, are **kept 90 days and then deleted by hand** — `ARCHIVE_RETENTION_DAYS` in `db.js`. There is deliberately no sweeper: the archive exists because one unconfirmed API call can delete a profile, so a timer that removed them would reintroduce the data loss the archive prevents. The server lists them at startup (`[retention]`) so they cannot accumulate unnoticed, and nothing reclaims the space automatically.
+
+Legacy flat files in `pdfs/` and `dna/` predate the per-user layout and are never unlinked, since one content-addressed file may be shared by several profiles and a given profile's database cannot see the others' references.
 
 ## Deployment
 

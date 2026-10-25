@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { UserProvider, useUser } from './context/UserContext'
+import { toLocalDateStr } from './localDate'
 import { api } from './api'
 import Sidebar from './components/Sidebar'
 import BodySection from './components/BodySection'
@@ -238,7 +239,7 @@ function Dashboard() {
       },
     })
     const link = document.createElement('a')
-    link.download = `health-${new Date().toISOString().slice(0, 10)}.png`
+    link.download = `health-${toLocalDateStr()}.png`
     link.href = canvas.toDataURL('image/png')
     link.click()
     setPrintSections(null)

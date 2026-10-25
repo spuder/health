@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toLocalDateStr } from '../localDate'
 import { api } from '../api'
 import RawDataModal from './RawDataModal'
 import {
@@ -111,7 +112,7 @@ export default function ExerciseSection({ data, userId, onRefresh }) {
   const workoutsThisWeek = last7.reduce((s, e) => s + (e.workout_count ?? 0), 0)
   const workoutMinsThisWeek = last7.reduce((s, e) => s + (e.workout_minutes ?? 0), 0)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalDateStr()
   const todayEntry = entries.find(e => e.date === today)
   const todayMins = todayEntry?.ex_minutes ?? null
 

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url'
 import multer from 'multer'
 
 import Anthropic from '@anthropic-ai/sdk'
-import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, archiveUserDna, DATA_DIR } from './db.js'
+import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, archiveUserDna, listRetainedArtifacts, ARCHIVE_RETENTION_DAYS, DATA_DIR } from './db.js'
 
 if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
   console.error('FATAL: ANTHROPIC_API_KEY is not set. Add it to your .env file.')
@@ -282,6 +282,17 @@ function parseTimeToHours(str) {
   return parseInt(m[1]) + parseInt(m[2]) / 60 + parseInt(m[3]) / 3600
 }
 
+// Put a clock hour on one continuous axis for a night that crosses midnight, so
+// "earlier" and "later" can be compared at all: evening hours keep their value,
+// after-midnight hours become 24..42. The boundary is 18:00 rather than noon
+// because a wake time can legitimately be 12:30 (12.5), and at a noon boundary
+// that would sort as an evening hour and lose to a 07:00 wake. Nothing files a
+// night that starts between 02:00 and 19:00 (those are discarded as naps), so no
+// real bedtime lands in the 12..18 gap.
+function nightHour(v) {
+  return v < 18 ? v + 24 : v
+}
+
 // Ranges calibrated against Rythm Health's Optimal/Average/Out-of-Range classifications.
 // range_low/high = outer boundary (Average zone). optimal_low/high = inner target (Optimal zone).
 const BLOOD_MARKERS = {
@@ -517,15 +528,19 @@ app.get('/api/:userId/sleep', requireUser, (req, res) => {
   // for the same night. pivotMetrics keeps whichever source's row synced most recently,
   // which flip-flops on every re-sync. Override with the earliest-recorded bedtime and
   // latest-recorded wake_time across all of that night's sources instead.
-  const normBedtime = v => v < 12 ? v + 24 : v
+  //
+  // Both comparisons run through nightHour. wake_time used to use a raw `>`, which is
+  // only right while every value is a morning hour: a source reporting an evening
+  // wake (23.x) beat a real 07:00, because 23.5 > 7. On the night axis the 07:00
+  // normalises to 31 and wins, and a legitimate 12:30 wake (36.5) still beats both.
   const byDate = {}
   for (const entry of entries) byDate[entry.date] = entry
   for (const row of rows) {
     const entry = byDate[row.date]
-    if (row.metric === 'bedtime' && (entry.bedtime == null || normBedtime(row.value) < normBedtime(entry.bedtime))) {
+    if (row.metric === 'bedtime' && (entry.bedtime == null || nightHour(row.value) < nightHour(entry.bedtime))) {
       entry.bedtime = row.value
     }
-    if (row.metric === 'wake_time' && (entry.wake_time == null || row.value > entry.wake_time)) {
+    if (row.metric === 'wake_time' && (entry.wake_time == null || nightHour(row.value) > nightHour(entry.wake_time))) {
       entry.wake_time = row.value
     }
   }
@@ -741,6 +756,13 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
     ON CONFLICT(date, metric, source) DO UPDATE SET value = excluded.value
   `)
 
+  // What a night already holds, so a clipped re-sync can be told apart from a
+  // genuine correction before it overwrites anything.
+  const readNight = db.prepare(`
+    SELECT metric, value FROM metrics
+    WHERE date = ? AND source = ? AND metric IN ('sleep_hours', 'bedtime')
+  `)
+
   const workouts = req.body?.data?.workouts ?? []
 
   // Auto-extract birth year from HAE date_of_birth if not already set
@@ -859,6 +881,33 @@ app.post('/api/:userId/import/apple-health', requireUser, (req, res) => {
           // writing a row of zeros over a good one.
           const asleepHours = night.core + night.deep + night.rem + night.asleep
           if (!(asleepHours > 0)) { stats.skipped++; continue }
+
+          // An export window that opens after midnight (an automation sending only
+          // "today") delivers just the tail of a night: the cluster starts ~00:0x and
+          // its totals cover the post-midnight part alone. Writing that over a
+          // complete record truncates the night and drops bedtime to ~00:00.
+          //
+          // Refuse that one case: the stored night began in the evening, this one did
+          // not, and this one is no longer. Deliberately narrow -- a genuinely shorter
+          // night still starts in the evening, so the guard does not fire and the
+          // correction still lands. A blanket MAX would instead ratchet, leaving a
+          // night that was first recorded too long permanently uncorrectable.
+          const newBedtime = parseTimeToHours(night.start)
+          const prior = {}
+          for (const r of readNight.all(night.ownerDate, night.src)) prior[r.metric] = r.value
+          const storedBeganInEvening = prior.bedtime != null && nightHour(prior.bedtime) < 24
+          const newBeganAfterMidnight = !isNaN(newBedtime) && nightHour(newBedtime) >= 24
+          if (storedBeganInEvening && newBeganAfterMidnight &&
+              prior.sleep_hours != null && asleepHours <= prior.sleep_hours) {
+            console.log(new Date().toISOString(), '[sleep clipped]', JSON.stringify({
+              ownerDate: night.ownerDate, source: night.src,
+              stored: { bedtime: prior.bedtime, sleep_hours: prior.sleep_hours },
+              incoming: { bedtime: Math.round(newBedtime * 100) / 100, sleep_hours: Math.round(asleepHours * 100) / 100 },
+              verdict: 'post-midnight tail, not longer → kept stored night',
+            }))
+            stats.skipped++
+            continue
+          }
 
           const sleepFields = [
             ['sleep_hours', asleepHours],
@@ -1868,4 +1917,15 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Health Dashboard running on http://localhost:${PORT}`)
+
+  // Archives and backups are never removed automatically (see db.js -> Retention).
+  // Name them at startup so they cannot sit on the volume unnoticed.
+  const retained = listRetainedArtifacts()
+  if (retained.length) {
+    const bytes = retained.reduce((n, r) => n + (r.bytes ?? 0), 0)
+    console.log(`[retention] ${retained.length} archived artifact(s), ${(bytes / 1048576).toFixed(1)} MB — kept ${ARCHIVE_RETENTION_DAYS} days, then delete by hand`)
+    for (const r of retained.filter(r => r.stale)) {
+      console.log(`[retention] past ${ARCHIVE_RETENTION_DAYS} days (${r.ageDays}d): ${r.name}`)
+    }
+  }
 })

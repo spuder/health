@@ -337,3 +337,32 @@ export function archiveUserPdfs(userId) {
 export function archiveUserDna(userId) {
   return archiveUserSubdir('dna', userId)
 }
+
+// ── Retention ──────────────────────────────────────────────────────────
+// Retention policy for everything this module sets aside instead of deleting:
+// a deleted profile's `<id>.db.deleted-<stamp>` (plus its -wal/-shm and its
+// pdfs/ and dna/ directories), and any `*.bak-*` snapshot.
+//
+//   Keep an archive for 90 days, then delete it by hand.
+//
+// Deliberately not automatic. These are medical records whose archive exists
+// precisely because a single unconfirmed API call created it; a sweeper that
+// deleted them on a timer would reintroduce the data loss the archive prevents.
+// This only reports, so the artifacts stay visible instead of quietly consuming
+// the volume. Returns the entries found, oldest first.
+export const ARCHIVE_RETENTION_DAYS = 90
+
+export function listRetainedArtifacts() {
+  let names = []
+  try { names = fs.readdirSync(DATA_DIR) } catch { return [] }
+
+  const out = []
+  for (const name of names) {
+    if (!/\.deleted-|\.bak-/.test(name)) continue
+    let stat
+    try { stat = fs.statSync(path.join(DATA_DIR, name)) } catch { continue }
+    const ageDays = Math.floor((Date.now() - stat.mtimeMs) / 86400000)
+    out.push({ name, ageDays, bytes: stat.isDirectory() ? null : stat.size, stale: ageDays >= ARCHIVE_RETENTION_DAYS })
+  }
+  return out.sort((a, b) => b.ageDays - a.ageDays)
+}

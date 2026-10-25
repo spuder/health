@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Set up Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: 20
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+          client/package-lock.json
+
+    # Cheap and fast: catches syntax errors before the installs.
+    - name: Syntax check
+      run: |
+        node --check server.js
+        node --check db.js
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm ci --prefix client
+
+    - name: Build client
+      run: npm run build --prefix client
+
+    # There is no test suite, so this proves the API boots and answers requests.
+    - name: Boot the API and hit /api/users
+      env:
+        ANTHROPIC_API_KEY: ci-placeholder
+        DATA_DIR: ${{ runner.temp }}/data
+      run: |
+        mkdir -p "$DATA_DIR"
+        node server.js > server.log 2>&1 &
+        for _ in $(seq 1 30); do
+          curl -fsS http://localhost:3001/api/users > /dev/null && break
+          sleep 1
+        done
+        curl -fsS http://localhost:3001/api/users || { cat server.log; exit 1; }
+        kill %1 || true

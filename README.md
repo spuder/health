@@ -1,21 +1,47 @@
-# Health
+<p align="center">
+  <img src="./logo.png" width="130" alt="Health logo">
+</p>
 
-<center>
-  <img src="./logo.png" alt="Health logo" width="180" style="display:block;margin:0 auto;">
-</center>
+<h1 align="center">Health</h1>
 
-**One health dashboard to rule them all.**
+<p align="center">
+  <b>One health dashboard to rule them all.</b><br>
+  Bloodwork, InBody scans, smart-scale weight, sleep, exercise and Apple Health<br>
+  in one self-hosted dashboard. AI OCR for PDFs and PNGs, plus a REST API.
+</p>
 
-Import all your bloodwork, inbody, protocols, smart scale, apple health into a single dashboard. 
+<p align="center">
+  <a href="https://github.com/spuder/health/pkgs/container/health"><img alt="Docker: ghcr.io" src="https://img.shields.io/badge/docker-ghcr.io-2f6fed?style=for-the-badge&amp;logo=docker&amp;logoColor=white&amp;labelColor=555"></a>
+  <a href="#deploying-with-docker--tailscale"><img alt="Self-host: compose.yaml" src="https://img.shields.io/badge/self--host-compose.yaml-e3743b?style=for-the-badge&amp;logo=tailscale&amp;logoColor=white&amp;labelColor=555"></a>
+</p>
 
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#deploying-with-docker--tailscale">Self-hosting</a> ·
+  <a href="#auto-health-export">Apple Health sync</a> ·
+  <a href="#import">Import</a> ·
+  <a href="#development">Development</a> ·
+  <a href="https://github.com/spuder/health/issues">Issues</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/spuder/health/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/spuder/health/ci.yml?branch=main&amp;label=CI"></a>
+  <a href="https://github.com/spuder/health/pkgs/container/health"><img alt="Image" src="https://ghcr-badge.egpl.dev/spuder/health/latest_tag?label=image&amp;trim=major"></a>
+  <a href="https://github.com/spuder/health/pkgs/container/health"><img alt="Image size" src="https://ghcr-badge.egpl.dev/spuder/health/size"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/spuder/health"></a>
+  <a href="https://github.com/spuder/health/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/spuder/health"></a>
+  <a href="https://github.com/spuder/health/issues"><img alt="Issues" src="https://img.shields.io/github/issues/spuder/health"></a>
+  <a href="https://github.com/spuder/health/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/spuder/health"></a>
+</p>
 
 ## Features
 
-- Import/Export CSV/JSON
-- Self host on rasberry pi or any Docker host
-- Track protocols
-- Optional OCR scanning of bloodwork
-- Rest API to sync with external services
+- **Import/Export** CSV or JSON.
+- **Self-host** on a Raspberry Pi or any Docker host.
+- **Track protocols:** supplements and medications over time.
+- **Optional OCR** scanning of bloodwork.
+- **REST API** to sync with external services.
 
 ## What it does
 
@@ -69,6 +95,8 @@ labels:
 
 3. **Point Health Auto Export at the tailnet address** (`https://health.<your-tailnet>.ts.net`, not `localhost`) in the automations described below, so your iPhone can sync from anywhere, not just your home Wi-Fi.
 
+Prefer a prebuilt image to `--build`? Images are published to [`ghcr.io/spuder/health`](https://github.com/spuder/health/pkgs/container/health) on every push to `main` (`latest`, `sha-<short>`) and on `v*` tags (`1.2.3`, `1.2`), for `linux/amd64` and `linux/arm64`. To use one, swap `build: .` for `image: ghcr.io/spuder/health:latest` in [`compose.yaml`](./compose.yaml).
+
 ## Getting Your User ID
 
 Create a user in the web UI or via `GET /api/users` to list existing users. The ID is auto-generated from the user's name.
@@ -83,18 +111,16 @@ http://your-dashboard:3001/api/{userId}/import/apple-health
 
 Metrics are automatically mapped to the dashboard (e.g., `body_mass` → weight).
 
+| Sleep | Health | Workouts |
+| :---: | :---: | :---: |
+| <img src="./images/sleep.jpg" width="220" alt="Sleep automation: Sleep Analysis only, Summarize Data off"> | <img src="./images/health.PNG" width="220" alt="Health automation: every metric except Sleep Analysis, Summarize Data on"> | <img src="./images/workouts.PNG" width="220" alt="Workouts automation"> |
+
 1. **Sleep.** Data Type: Health Metrics → select only *Sleep Analysis* → turn **Summarize Data off**.
    Sleep needs raw per-session data, not a daily summary. With Summarize Data on, HAE silently collapses every source (Apple Watch, a bed sensor, etc.) into a single point per night and picks just one, dropping the rest, even if you have multiple sources enabled under Preferred Sources. With it off, you get one row per sleep stage per source, which the dashboard reconstructs into a full per-source nightly breakdown itself.
 
-   ![Sleep automation settings](./images/sleep.jpg)
-
 2. **Health.** Data Type: Health Metrics → select every other metric you want tracked (weight, heart rate, labs, etc.). **Explicitly leave Sleep Analysis unchecked** here, since it's handled by the Sleep automation above. Keep Summarize Data on (default) for this one: per-session granularity isn't needed for these metrics, and turning it off can make the sync slow.
 
-   ![Health automation settings](./images/health.PNG)
-
 3. **Workouts.** Data Type: Workouts.
-
-   ![Workouts automation settings](./images/workouts.PNG)
 
 Keeping Sleep in its own automation (rather than turning off summarization for everything) avoids the slow background-sync issue HAE's own team warns about when disabling summarization across a large metric list.
 

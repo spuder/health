@@ -35,16 +35,22 @@ jobs:
       run: |
         node --check server.js
         node --check db.js
+        node --check views.js
+        node --check metrics-query.js
+        node --check mcp-server.js
 
     - name: Install dependencies
       run: |
         npm ci
         npm ci --prefix client
 
+    - name: Unit and integration tests (views, metric queries, MCP server, REST)
+      run: npm test
+
     - name: Build client
       run: npm run build --prefix client
 
-    # There is no test suite, so this proves the API boots and answers requests.
+    # Smoke test: the API boots and answers requests.
     - name: Boot the API and hit /api/users
       env:
         ANTHROPIC_API_KEY: ci-placeholder

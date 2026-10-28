@@ -6,6 +6,7 @@ import BodySection from './components/BodySection'
 import SleepSection from './components/SleepSection'
 import ExerciseSection from './components/ExerciseSection'
 import HeartRateSection from './components/HeartRateSection'
+import ViewsSection from './components/ViewsSection'
 import LabsSection from './components/LabsSection'
 import DnaSection from './components/DnaSection'
 import EventsSection from './components/EventsSection'
@@ -357,6 +358,7 @@ function Dashboard() {
             {!hiddenSections.has('sleep')     && <div className={printSections && !printSections.sleep     ? 'print-exclude' : ''}><SleepSection     data={sleepData} /></div>}
             {!hiddenSections.has('exercise')  && <div className={printSections && !printSections.exercise  ? 'print-exclude' : ''}><ExerciseSection  data={exerciseData}  userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('heartrate') && <div className={printSections && !printSections.heartrate ? 'print-exclude' : ''}><HeartRateSection data={heartrateData} /></div>}
+            {!hiddenSections.has('views')     && <div className={printSections && !printSections.views     ? 'print-exclude' : ''}><ViewsSection     userId={currentUserId} /></div>}
             {!hiddenSections.has('labs')      && <div className={printSections && !printSections.labs      ? 'print-exclude' : ''}><LabsSection      data={bloodData}     reports={labReports?.reports ?? []} userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('dna')       && <div className={printSections && !printSections.dna       ? 'print-exclude' : ''}><DnaSection       data={dnaData}       userId={currentUserId} onRefresh={loadAll} /></div>}
             {!hiddenSections.has('events')    && <div className={printSections && !printSections.events    ? 'print-exclude' : ''}><EventsSection    data={eventsData}    userId={currentUserId} onRefresh={loadAll} /></div>}

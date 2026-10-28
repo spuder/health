@@ -1,7 +1,7 @@
 # ── Stage 1: Build ────────────────────────────────────────────
-# node:20 is based on buildpack-deps and includes python3, make, g++
+# node:22 is based on buildpack-deps and includes python3, make, g++
 # so better-sqlite3 compiles without any extra apt installs.
-FROM node:20 AS builder
+FROM node:22 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build --prefix client
 
 # ── Stage 2: Runtime ──────────────────────────────────────────
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 

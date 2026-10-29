@@ -6,6 +6,7 @@ const NAV = [
   { id: 'sleep',     label: 'Sleep',     icon: '🌙',  accent: '#60a5fa' },
   { id: 'exercise',  label: 'Exercise',  icon: '🏃',  accent: '#f97316' },
   { id: 'heartrate', label: 'Heart Rate', icon: '❤️',  accent: '#f43f5e' },
+  { id: 'views',     label: 'Views',     icon: '★',   accent: '#eab308' },
   { id: 'labs',      label: 'Labs',      icon: '🧪',  accent: '#34d399' },
   { id: 'dna',       label: 'DNA',       icon: '🧬',  accent: '#22d3ee' },
   { id: 'events',    label: 'Events',    icon: '📅',  accent: '#f59e0b' },

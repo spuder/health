@@ -9,6 +9,8 @@ import multer from 'multer'
 
 import Anthropic from '@anthropic-ai/sdk'
 import { getDb, readUsers, writeUsers, archiveUserDb, archiveUserPdfs, archiveUserDna, DATA_DIR } from './db.js'
+import { listViews, getView, addView, updateView, removeView, ViewError } from './views.js'
+import { listMetrics, queryMetrics, getViewData } from './metrics-query.js'
 
 if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_api_key_here') {
   console.error('FATAL: ANTHROPIC_API_KEY is not set. Add it to your .env file.')
@@ -1852,6 +1854,66 @@ app.post('/api/:userId/protocols/:id/copy-to-next', requireUser, (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // SPA fallback
 // ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// Views & generic metric queries (#12). Thin wrappers over views.js and
+// metrics-query.js, which the MCP server (mcp-server.js) also calls.
+// ─────────────────────────────────────────────────────────────
+
+function sendViewError(res, err) {
+  if (err instanceof ViewError) return res.status(err.status).json({ error: err.message })
+  console.error('[views]', err)
+  res.status(500).json({ error: err.message })
+}
+
+app.get('/api/:userId/metrics', requireUser, (req, res) => {
+  res.json(listMetrics(getDb(req.params.userId), { search: req.query.search }))
+})
+
+// GET /api/:userId/metrics/query?metric=a&metric=b&from=&to=&days=&source=&aggregate=&limit=
+app.get('/api/:userId/metrics/query', requireUser, (req, res) => {
+  try {
+    const q = req.query
+    const metrics = [].concat(q.metric ?? []).flatMap(m => String(m).split(','))
+    const num = v => (v == null || v === '' ? undefined : Number(v))
+    res.json(queryMetrics(getDb(req.params.userId), metrics, {
+      from: q.from, to: q.to, days: num(q.days), source: q.source,
+      aggregate: q.aggregate, limit: num(q.limit),
+    }))
+  } catch (err) { sendViewError(res, err) }
+})
+
+app.get('/api/:userId/views', requireUser, (req, res) => {
+  res.json(listViews(getDb(req.params.userId), { starredOnly: req.query.starred === '1' }))
+})
+
+app.post('/api/:userId/views', requireUser, (req, res) => {
+  try { res.status(201).json(addView(getDb(req.params.userId), req.body)) }
+  catch (err) { sendViewError(res, err) }
+})
+
+app.get('/api/:userId/views/:view', requireUser, (req, res) => {
+  const view = getView(getDb(req.params.userId), req.params.view)
+  if (!view) return res.status(404).json({ error: `view '${req.params.view}' not found` })
+  res.json(view)
+})
+
+app.get('/api/:userId/views/:view/data', requireUser, (req, res) => {
+  try {
+    const days = req.query.days ? Number(req.query.days) : undefined
+    res.json(getViewData(getDb(req.params.userId), req.params.view, { days, from: req.query.from, to: req.query.to }))
+  } catch (err) { sendViewError(res, err) }
+})
+
+app.patch('/api/:userId/views/:view', requireUser, (req, res) => {
+  try { res.json(updateView(getDb(req.params.userId), req.params.view, req.body)) }
+  catch (err) { sendViewError(res, err) }
+})
+
+app.delete('/api/:userId/views/:view', requireUser, (req, res) => {
+  try { res.json({ ok: true, removed: removeView(getDb(req.params.userId), req.params.view) }) }
+  catch (err) { sendViewError(res, err) }
+})
 
 // Unmatched /api/* paths must 404 as JSON. Falling through to the catch-all
 // below answered them with index.html and a 200, so `res.json()` in

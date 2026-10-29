@@ -5,6 +5,7 @@ const SECTIONS = [
   { id: 'sleep',     label: 'Sleep',      defaultOn: false },
   { id: 'exercise',  label: 'Exercise',   defaultOn: true  },
   { id: 'heartrate', label: 'Heart Rate', defaultOn: true  },
+  { id: 'views',     label: 'Views',      defaultOn: true  },
   { id: 'labs',      label: 'Labs',       defaultOn: true  },
   { id: 'dna',       label: 'DNA',        defaultOn: false },
   { id: 'events',    label: 'Events',     defaultOn: false },

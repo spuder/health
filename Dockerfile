@@ -28,7 +28,7 @@ COPY --from=builder /app/node_modules    ./node_modules
 COPY --from=builder /app/client/dist     ./client/dist
 
 # Copy source
-COPY server.js db.js package.json        ./
+COPY server.js db.js views.js metrics-query.js mcp-server.js package.json ./
 COPY scripts                             ./scripts
 
 # Bake in seed/default data — copied into the volume on first run

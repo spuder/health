@@ -15,7 +15,7 @@ npm run migrate   # scripts/migrate.js — JSON seeds → SQLite, idempotent
 
 Vite proxies `/api` → `localhost:3001`, so work against `http://localhost:5173` in dev. In production Express serves `client/dist` and has an `app.get('*')` SPA fallback, so the whole app is on `:3001`.
 
-There is no test suite and no linter configured. Verification is `node --check server.js` / `node --check db.js` plus exercising endpoints with curl against a running dev server.
+`npm test` runs the `node:test` suite in `test/` (views data model, metric queries, the MCP server over real stdio, and the views REST routes against a booted server). Each test points `DATA_DIR` at a temp dir. There is no linter; also `node --check` the server files and exercise other endpoints with curl.
 
 `ANTHROPIC_API_KEY` is required — `server.js` calls `process.exit(1)` at boot without it. `.envrc` fetches it (and the Dockhand secret) via `op read` from 1Password; `make dev` sources `.envrc` itself.
 
@@ -71,6 +71,10 @@ Workouts are aggregated per day into `workout_count`, `exercise_minutes` and `hr
 `UserContext` holds the active user (`localStorage: hd_userId`); `App.jsx` keeps the active section in `localStorage: activeSection` and per-user hidden sections in `health_hidden_sections_<userId>`. All HTTP goes through the single `api` object in `client/src/api.js` — add endpoints there, not inline `fetch` in components. One `*Section.jsx` component per dashboard section; charts are Recharts; PNG export uses html2canvas.
 
 Styling is a dark theme with literal hex values inline in components (`bg-[#131d2e]`, `text-[#94a3b8]`, accent `#7c3aed`). `tailwind.config.js` defines named colors but most components predate them — match the surrounding file rather than converting.
+
+### Views and the MCP server
+
+`views.js` is the data model for custom dashboard views (the `views` table: title, slug, metric keys, chart, aggregate, range, `starred`, position, `created_by`). `metrics-query.js` holds generic read queries over `metrics`. Both are plain functions over a db handle that throw `ViewError` (with a status); `server.js` (`/api/:userId/views`, `/metrics`, `/metrics/query`) and `mcp-server.js` are thin wrappers. Put view logic in `views.js`, not in a route or a tool. `mcp-server.js` is a separate stdio process that imports `db.js` directly; it must never write to stdout except through the MCP transport (it reroutes `console.log` to stderr).
 
 ## Deployment
 

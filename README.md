@@ -21,6 +21,7 @@
   <a href="#deploying-with-docker--tailscale">Self-hosting</a> ·
   <a href="#auto-health-export">Apple Health sync</a> ·
   <a href="#import">Import</a> ·
+  <a href="#mcp-server-agents">MCP</a> ·
   <a href="#development">Development</a> ·
   <a href="https://github.com/spuder/health/issues">Issues</a>
 </p>
@@ -42,6 +43,7 @@
 - **Track protocols:** supplements and medications over time.
 - **Optional OCR** scanning of bloodwork.
 - **REST API** to sync with external services.
+- **MCP server** so AI agents can query your data and add or remove dashboard views.
 
 ## What it does
 
@@ -70,6 +72,8 @@ make dev
 ```
 
 Installs client dependencies, starts the API server on port 3001 and the Vite dev server on port 5173 (with hot reload). Open `http://localhost:5173` in your browser, or use the mobile preview vscode extension
+
+Run the tests with `npm test`.
 
 ## Deploying with Docker + Tailscale
 
@@ -135,6 +139,66 @@ You can import from CSV, PNG or PDF
 **InBody**
 
 Just drop the PDF/PNG/CSV into the 'import' page, AI will OCR then import values. 
+
+## MCP server (agents)
+
+`mcp-server.js` is a [Model Context Protocol](https://modelcontextprotocol.io/) server, so an agent (Claude Desktop, Claude Code, Cursor, or any MCP client) can query your health data and add or remove charts on the dashboard. It runs over stdio and reads the same `DATA_DIR` as the web server, so views an agent adds appear in the **Views** section (it refreshes when the tab regains focus). It does not need `ANTHROPIC_API_KEY`.
+
+| Tool | What it does |
+| --- | --- |
+| `list_users` | List profiles |
+| `list_metrics` | Every metric key with counts, date span, sources and latest value |
+| `query_metrics` | Daily series plus min/max/avg/first/last for one or more metrics, by date range or last N days |
+| `list_views` | The custom views on the dashboard |
+| `get_view_data` | The data a view charts |
+| `add_view` | Add a chart (`line`, `bar`, `area`, or `number`) over one or more metrics |
+| `update_view` | Rename, re-scope, reorder, or star/unstar (hide) a view |
+| `remove_view` | Delete a view (the metric data itself is untouched) |
+
+Every tool takes an optional `user_id`. Set `HEALTH_USER_ID` to pick a default profile; with a single profile it is picked automatically.
+
+Run it by hand:
+
+```bash
+DATA_DIR=./data HEALTH_USER_ID=your-user-id npm run mcp
+```
+
+**Claude Desktop / Cursor** (`claude_desktop_config.json` or `.cursor/mcp.json`), from a checkout:
+
+```json
+{
+  "mcpServers": {
+    "health": {
+      "command": "node",
+      "args": ["/path/to/health/mcp-server.js"],
+      "env": { "DATA_DIR": "/path/to/health/data", "HEALTH_USER_ID": "your-user-id" }
+    }
+  }
+}
+```
+
+**Claude Code:**
+
+```bash
+claude mcp add health --env DATA_DIR=/path/to/health/data --env HEALTH_USER_ID=your-user-id -- node /path/to/health/mcp-server.js
+```
+
+**Against the Docker deployment**, run it inside the running container so it shares the `/data` volume:
+
+```json
+{
+  "mcpServers": {
+    "health": {
+      "command": "docker",
+      "args": ["exec", "-i", "-e", "HEALTH_USER_ID=your-user-id", "health", "node", "mcp-server.js"]
+    }
+  }
+}
+```
+
+(`health` is the container name; use `docker compose ps` to find yours.) Then ask things like *"How has my resting heart rate trended over the last 90 days?"* or *"Add a view of my outdoor running pace, and remove it when I stop running."*
+
+The same views are available over REST: `GET/POST /api/{userId}/views`, `GET/PATCH/DELETE /api/{userId}/views/{id-or-slug}`, `GET /api/{userId}/views/{id-or-slug}/data`, plus `GET /api/{userId}/metrics` and `GET /api/{userId}/metrics/query?metric=weight&days=30`.
 
 ## Related
 

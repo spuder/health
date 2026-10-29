@@ -99,6 +99,25 @@ const SCHEMA = `
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Dashboard views: user/agent-defined charts over the metrics table (#12, #13).
+  -- See views.js for the data model; every read and write goes through it.
+  CREATE TABLE IF NOT EXISTS views (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug         TEXT    NOT NULL UNIQUE,
+    title        TEXT    NOT NULL,
+    description  TEXT,
+    kind         TEXT    NOT NULL DEFAULT 'metric_chart',
+    metrics_json TEXT    NOT NULL,
+    chart        TEXT    NOT NULL DEFAULT 'line',
+    aggregate    TEXT    NOT NULL DEFAULT 'last',
+    range_days   INTEGER,
+    starred      INTEGER NOT NULL DEFAULT 1,
+    position     INTEGER NOT NULL DEFAULT 0,
+    created_by   TEXT    NOT NULL DEFAULT 'user',
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_metrics_date    ON metrics(date);
   CREATE INDEX IF NOT EXISTS idx_metrics_metric  ON metrics(metric);
   CREATE INDEX IF NOT EXISTS idx_events_date     ON events(date);

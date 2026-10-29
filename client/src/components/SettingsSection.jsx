@@ -3,6 +3,7 @@ const CATEGORIES = [
   { id: 'sleep',     label: 'Sleep',      icon: '🌙',  description: 'Sleep duration and quality' },
   { id: 'exercise',  label: 'Exercise',   icon: '🏃',  description: 'Workouts and activity' },
   { id: 'heartrate', label: 'Heart Rate', icon: '❤️',  description: 'Resting and active heart rate' },
+  { id: 'views',     label: 'Views',      icon: '★',   description: 'Custom charts added by you or an agent' },
   { id: 'labs',      label: 'Labs',       icon: '🧪',  description: 'Blood work and lab results' },
   { id: 'dna',       label: 'DNA',        icon: '🧬',  description: 'Genetic traits and DNA test uploads' },
   { id: 'events',    label: 'Life Events', icon: '📅', description: 'Milestones and logged events' },

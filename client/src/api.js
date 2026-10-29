@@ -63,6 +63,14 @@ export const api = {
   deleteSubProtocol:      (userId, id)       => req(`/${userId}/sub-protocols/${id}`, { method: 'DELETE' }),
   copyProtocolToNextMonth:(userId, id)       => req(`/${userId}/protocols/${id}/copy-to-next`, { method: 'POST' }),
 
+  // ── Views (custom dashboard charts; also managed by the MCP server) ──
+  getMetrics:   (userId)          => req(`/${userId}/metrics`),
+  getViews:     (userId, starred) => req(`/${userId}/views${starred ? '?starred=1' : ''}`),
+  getViewData:  (userId, view)    => req(`/${userId}/views/${encodeURIComponent(view)}/data`),
+  addView:      (userId, spec)    => req(`/${userId}/views`, { method: 'POST', body: JSON.stringify(spec) }),
+  updateView:   (userId, view, p) => req(`/${userId}/views/${encodeURIComponent(view)}`, { method: 'PATCH', body: JSON.stringify(p) }),
+  removeView:   (userId, view)    => req(`/${userId}/views/${encodeURIComponent(view)}`, { method: 'DELETE' }),
+
   // ── DNA ───────────────────────────────────────────────────
   getDna:         (userId)     => req(`/${userId}/dna`),
   addDnaTrait:    (userId, e)  => req(`/${userId}/dna/traits`, { method: 'POST', body: JSON.stringify(e) }),

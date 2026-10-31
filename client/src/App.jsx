@@ -309,7 +309,7 @@ function Dashboard() {
         <span className="text-white font-semibold text-sm tracking-tight">Health</span>
       </div>
 
-      <main className="md:ml-56 px-4 md:px-10 py-6 md:py-10 pt-20 md:pt-10 max-w-5xl">
+      <main className="md:ml-56 px-4 md:px-10 py-6 md:py-10 pt-20 md:pt-10 max-w-[1600px]">
         {/* Page header */}
         <div className="no-print mb-8 md:mb-10 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">

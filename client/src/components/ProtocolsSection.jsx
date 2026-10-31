@@ -283,7 +283,8 @@ function MonthCard({ month, protocols, isCurrent, userId, onRefresh }) {
   return (
     <div
       data-month-card
-      className="flex flex-col min-w-0"
+      className="shrink-0 flex flex-col"
+      style={{ width: 'min(calc(100vw - 64px), 340px)', scrollSnapAlign: 'center' }}
     >
       {/* Month label */}
       <p className={`text-sm font-semibold text-center mb-3 ${isCurrent ? 'text-[#94a3b8]' : 'text-[#475569]'}`}>
@@ -332,6 +333,9 @@ function MonthCard({ month, protocols, isCurrent, userId, onRefresh }) {
 
 // ── Section ──────────────────────────────────────────────────────
 export default function ProtocolsSection({ data = [], userId, onRefresh }) {
+  const scrollRef = useRef()
+  const hasScrolled = useRef(false)
+  const [fade, setFade] = useState({ left: false, right: false })
   const cur = currentYM()
   const months = useMemo(() => getVisibleMonths(data), [data])
 
@@ -344,6 +348,32 @@ export default function ProtocolsSection({ data = [], userId, onRefresh }) {
     return map
   }, [data])
 
+  function updateFade() {
+    const el = scrollRef.current
+    if (!el) return
+    const left = el.scrollLeft > 4
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+    setFade(f => (f.left === left && f.right === right ? f : { left, right }))
+  }
+
+  // Center the current month once on first load (scrolls only the strip, not the page)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (hasScrolled.current || !el || !months.length) return
+    const cards = el.querySelectorAll('[data-month-card]')
+    const card = cards[months.indexOf(cur)]
+    if (card) {
+      el.scrollLeft = card.offsetLeft - (el.clientWidth - card.offsetWidth) / 2
+      hasScrolled.current = true
+    }
+    updateFade()
+  }, [months.join(',')])
+
+  useEffect(() => {
+    window.addEventListener('resize', updateFade)
+    return () => window.removeEventListener('resize', updateFade)
+  }, [])
+
   return (
     <section id="protocols" className="mb-16">
       {/* Standard section header */}
@@ -352,21 +382,33 @@ export default function ProtocolsSection({ data = [], userId, onRefresh }) {
         <h2 className="text-white text-xl font-semibold">Protocols</h2>
       </div>
 
-      {/* Responsive grid: as many month columns as fit */}
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))' }}
-      >
-        {months.map(month => (
-          <MonthCard
-            key={month}
-            month={month}
-            protocols={byMonth[month] ?? []}
-            isCurrent={month === cur}
-            userId={userId}
-            onRefresh={onRefresh}
-          />
-        ))}
+      {/* Horizontal scroll */}
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          onScroll={updateFade}
+          className="flex overflow-x-auto pb-2 px-2"
+          style={{
+            scrollSnapType: 'x mandatory',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            gap: 16,
+          }}
+        >
+          {months.map(month => (
+            <MonthCard
+              key={month}
+              month={month}
+              protocols={byMonth[month] ?? []}
+              isCurrent={month === cur}
+              userId={userId}
+              onRefresh={onRefresh}
+            />
+          ))}
+        </div>
+        {/* Side fade hints: only shown when there is more to scroll that way */}
+        <div className={`pointer-events-none absolute left-0 top-0 bottom-2 w-6 sm:w-12 bg-gradient-to-r from-[#0d1520] to-transparent transition-opacity ${fade.left ? 'opacity-100' : 'opacity-0'}`} />
+        <div className={`pointer-events-none absolute right-0 top-0 bottom-2 w-6 sm:w-12 bg-gradient-to-l from-[#0d1520] to-transparent transition-opacity ${fade.right ? 'opacity-100' : 'opacity-0'}`} />
       </div>
     </section>
   )
